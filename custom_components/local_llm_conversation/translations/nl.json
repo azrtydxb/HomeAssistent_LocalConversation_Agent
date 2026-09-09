@@ -1,0 +1,179 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Verbinden met je LLM-provider",
+        "description": "Richt dit op een OpenAI-compatibele server, zoals vLLM, SGLang, LiteLLM of fastllm proxy. De URL mag alleen de host zijn; /v1 wordt toegevoegd als het ontbreekt.\n\nIn de volgende stap voeg je modellen toe aan deze provider.",
+        "data": {
+          "base_url": "Basis-URL",
+          "api_key": "API-sleutel"
+        },
+        "data_description": {
+          "base_url": "Bijvoorbeeld http://192.168.1.10:8000",
+          "api_key": "Laat leeg als het endpoint geen authenticatie vereist."
+        }
+      },
+      "reconfigure": {
+        "title": "Providerinstellingen",
+        "description": "Wijzig het endpoint of de API-sleutel. Modellen op deze provider blijven behouden.",
+        "data": {
+          "base_url": "Basis-URL",
+          "api_key": "API-sleutel"
+        },
+        "data_description": {
+          "base_url": "Bijvoorbeeld http://192.168.1.10:8000",
+          "api_key": "Laat leeg als het endpoint geen authenticatie vereist."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Providersleutel geweigerd",
+        "description": "{base_url} heeft de opgeslagen API-sleutel geweigerd. Voer een geldige sleutel in.",
+        "data": {
+          "api_key": "API-sleutel"
+        },
+        "data_description": {
+          "api_key": "Laat leeg als het endpoint geen authenticatie meer vereist."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan dat endpoint niet bereiken. Controleer de URL en of de server draait.",
+      "invalid_auth": "Het endpoint heeft die API-sleutel geweigerd."
+    },
+    "abort": {
+      "already_configured": "Dat endpoint is al ingesteld. Voeg er in plaats daarvan een model aan toe.",
+      "reconfigure_successful": "Provider bijgewerkt.",
+      "reauth_successful": "Providersleutel bijgewerkt."
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "title": "Model",
+      "initiate_flow": {
+        "user": "Model toevoegen",
+        "reconfigure": "Model opnieuw instellen"
+      },
+      "entry_type": "Gespreksagent",
+      "step": {
+        "user": {
+          "title": "Kies een model",
+          "description": "Kies een model van de provider. Daarna wordt getest wat het ondersteunt.",
+          "data": {
+            "name": "Naam",
+            "model": "Model"
+          },
+          "data_description": {
+            "name": "Zichtbaar in Home Assistant, bijvoorbeeld Spraak of Studeerkamer.",
+            "model": "Gekozen uit wat de provider aanbiedt. Typ een naam als die er niet bij staat."
+          }
+        },
+        "settings": {
+          "title": "Modelinstellingen",
+          "description": "{model}\n\nLeest afbeeldingen: {vision}",
+          "data": {
+            "llm_hass_api": "Home Assistant bedienen",
+            "assistant_name": "Naam van de assistent",
+            "advanced": "Geavanceerd"
+          },
+          "data_description": {
+            "llm_hass_api": "Welke tool-API's het model mag gebruiken. Zonder API kan het praten maar niets doen.",
+            "assistant_name": "Hoe de agent zichzelf noemt. Houd dit gelijk aan je wakewoord."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Geavanceerd",
+              "data": {
+                "prompt": "Ziel",
+                "vision": "Afbeeldingen naar dit model sturen",
+                "thinking": "Het model eerst laten nadenken",
+                "max_tokens": "Maximaal aantal tokens in het antwoord",
+                "temperature": "Temperatuur",
+                "top_p": "Top P",
+                "timeout": "Time-out voor antwoord (seconden)",
+                "tool_mode": "Hoe het model tools aanroept",
+                "language": "Altijd antwoorden in"
+              },
+              "data_description": {
+                "prompt": "De persoonlijkheid van de agent. {name} wordt vervangen door de naam hierboven.",
+                "vision": "Ingesteld door het model te testen. Servers accepteren afbeeldingen ook voor tekstmodellen en negeren ze stilzwijgend, dus dit wordt gemeten aan de hand van of een afbeelding prompttokens kost. Zet het uit als je liever geen camerabeelden verstuurt.",
+                "thinking": "Redenerende modellen antwoorden beter, maar duren seconden langer en verbruiken een groot deel van het tokenbudget voordat ze antwoorden. Standaard uit.",
+                "max_tokens": "Hoe lang een antwoord mag zijn. Redenerende modellen verbruiken hier veel van voordat ze antwoorden, dus zet het niet laag.",
+                "timeout": "Hoe lang er tussen tokens gewacht wordt voordat wordt opgegeven.",
+                "tool_mode": "Native gebruikt het tool-aanroepen van het endpoint en is juist voor vLLM, SGLang en LiteLLM. Prompted beschrijft de tools in de prompt en leest het antwoord uit; bedoeld voor kleine modellen waarvan de server geen tools ondersteunt. Dat is minder betrouwbaar en het antwoord kan pas worden uitgesproken als het volledig is. Geen laat de agent praten zonder iets te doen.",
+                "language": "Laat leeg om te antwoorden in de taal waarin je iets vraagt. Kies een taal en de agent antwoordt altijd in die taal. Let op: de spraakstem van je assistent heeft een eigen taalinstelling; komen die niet overeen, dan wordt correcte tekst met het verkeerde accent voorgelezen.",
+                "temperature": "Op de standaardwaarde wordt dit niet meegestuurd en geldt de standaard van de server. Sommige providers weigeren een verzoek waarin zowel temperatuur als top P staat."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Stel eerst de provider in voordat je er modellen aan toevoegt."
+      }
+    },
+    "ai_task_data": {
+      "title": "AI Task-model",
+      "initiate_flow": {
+        "user": "AI Task-model toevoegen",
+        "reconfigure": "AI Task-model opnieuw instellen"
+      },
+      "entry_type": "AI Task",
+      "step": {
+        "user": {
+          "title": "Kies een model",
+          "description": "Kies een model om data mee te genereren. Daarna wordt getest wat het ondersteunt.",
+          "data": {
+            "name": "Naam",
+            "model": "Model"
+          },
+          "data_description": {
+            "name": "Zichtbaar in Home Assistant, bijvoorbeeld Spraak of Studeerkamer.",
+            "model": "Gekozen uit wat de provider aanbiedt. Typ een naam als die er niet bij staat."
+          }
+        },
+        "settings": {
+          "title": "Modelinstellingen",
+          "description": "{model}\n\nLeest afbeeldingen: {vision}",
+          "data": {
+            "advanced": "Geavanceerd"
+          },
+          "data_description": {},
+          "sections": {
+            "advanced": {
+              "name": "Geavanceerd",
+              "data": {
+                "vision": "Afbeeldingen naar dit model sturen",
+                "thinking": "Het model eerst laten nadenken",
+                "max_tokens": "Maximaal aantal tokens in het antwoord",
+                "temperature": "Temperatuur",
+                "top_p": "Top P",
+                "timeout": "Time-out voor antwoord (seconden)",
+                "language": "Altijd antwoorden in"
+              },
+              "data_description": {
+                "vision": "Ingesteld door het model te testen. Servers accepteren afbeeldingen ook voor tekstmodellen en negeren ze stilzwijgend, dus dit wordt gemeten aan de hand van of een afbeelding prompttokens kost. Zet het uit als je liever geen camerabeelden verstuurt.",
+                "thinking": "Redenerende modellen antwoorden beter, maar duren seconden langer en verbruiken een groot deel van het tokenbudget voordat ze antwoorden. Standaard uit.",
+                "max_tokens": "Hoe lang een antwoord mag zijn. Redenerende modellen verbruiken hier veel van voordat ze antwoorden, dus zet het niet laag.",
+                "timeout": "Hoe lang er tussen tokens gewacht wordt voordat wordt opgegeven.",
+                "language": "Laat leeg om te antwoorden in de taal waarin je iets vraagt. Kies een taal en de agent antwoordt altijd in die taal. Let op: de spraakstem van je assistent heeft een eigen taalinstelling; komen die niet overeen, dan wordt correcte tekst met het verkeerde accent voorgelezen.",
+                "temperature": "Op de standaardwaarde wordt dit niet meegestuurd en geldt de standaard van de server. Sommige providers weigeren een verzoek waarin zowel temperatuur als top P staat."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Stel eerst de provider in voordat je er modellen aan toevoegt."
+      }
+    }
+  },
+  "selector": {
+    "tool_mode": {
+      "options": {
+        "native": "Native tool-aanroepen",
+        "prompted": "Beschreven in de prompt",
+        "none": "Geen tools"
+      }
+    }
+  }
+}

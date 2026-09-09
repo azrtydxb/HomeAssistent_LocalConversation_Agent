@@ -1,0 +1,179 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Se connecter à votre fournisseur LLM",
+        "description": "Pointez ceci vers n'importe quel serveur compatible OpenAI : vLLM, SGLang, LiteLLM ou fastllm proxy. L'URL peut se limiter à l'hôte ; /v1 est ajouté s'il manque.\n\nVous ajouterez des modèles à ce fournisseur à l'étape suivante.",
+        "data": {
+          "base_url": "URL de base",
+          "api_key": "Clé API"
+        },
+        "data_description": {
+          "base_url": "Par exemple http://192.168.1.10:8000",
+          "api_key": "Laissez vide si le point de terminaison ne demande pas d'authentification."
+        }
+      },
+      "reconfigure": {
+        "title": "Paramètres du fournisseur",
+        "description": "Modifiez le point de terminaison ou la clé API. Les modèles de ce fournisseur sont conservés.",
+        "data": {
+          "base_url": "URL de base",
+          "api_key": "Clé API"
+        },
+        "data_description": {
+          "base_url": "Par exemple http://192.168.1.10:8000",
+          "api_key": "Laissez vide si le point de terminaison ne demande pas d'authentification."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Clé du fournisseur refusée",
+        "description": "{base_url} a refusé la clé API enregistrée. Saisissez-en une valide.",
+        "data": {
+          "api_key": "Clé API"
+        },
+        "data_description": {
+          "api_key": "Laissez vide si le point de terminaison ne demande plus d'authentification."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Point de terminaison injoignable. Vérifiez l'URL et que le serveur fonctionne.",
+      "invalid_auth": "Le point de terminaison a refusé cette clé API."
+    },
+    "abort": {
+      "already_configured": "Ce point de terminaison est déjà configuré. Ajoutez-y plutôt un modèle.",
+      "reconfigure_successful": "Fournisseur mis à jour.",
+      "reauth_successful": "Clé du fournisseur mise à jour."
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "title": "Modèle",
+      "initiate_flow": {
+        "user": "Ajouter un modèle",
+        "reconfigure": "Reconfigurer le modèle"
+      },
+      "entry_type": "Agent conversationnel",
+      "step": {
+        "user": {
+          "title": "Choisir un modèle",
+          "description": "Choisissez un modèle du fournisseur. Il est ensuite testé pour voir ce qu'il prend en charge.",
+          "data": {
+            "name": "Nom",
+            "model": "Modèle"
+          },
+          "data_description": {
+            "name": "Affiché dans Home Assistant, par exemple Voix ou Bureau.",
+            "model": "Choisi parmi ce que propose le fournisseur. Saisissez un nom s'il n'apparaît pas."
+          }
+        },
+        "settings": {
+          "title": "Paramètres du modèle",
+          "description": "{model}\n\nLit les images : {vision}",
+          "data": {
+            "llm_hass_api": "Contrôler Home Assistant",
+            "assistant_name": "Nom de l'assistant",
+            "advanced": "Avancé"
+          },
+          "data_description": {
+            "llm_hass_api": "Quelles API d'outils le modèle peut utiliser. Sans aucune, il peut parler mais pas agir.",
+            "assistant_name": "Le nom que l'agent se donne. Alignez-le sur votre mot d'activation."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Avancé",
+              "data": {
+                "prompt": "Âme",
+                "vision": "Envoyer des images à ce modèle",
+                "thinking": "Laisser le modèle réfléchir d'abord",
+                "max_tokens": "Nombre maximal de jetons en réponse",
+                "temperature": "Température",
+                "top_p": "Top P",
+                "timeout": "Délai d'attente de réponse (secondes)",
+                "tool_mode": "Comment le modèle appelle les outils",
+                "language": "Toujours répondre en"
+              },
+              "data_description": {
+                "prompt": "La personnalité de l'agent. {name} est remplacé par le nom ci-dessus.",
+                "vision": "Déterminé en testant le modèle. Les serveurs acceptent les images même pour les modèles texte et les ignorent sans rien dire ; la mesure porte donc sur le coût en jetons d'une image. Désactivez-le si vous préférez ne pas envoyer d'images de caméra.",
+                "thinking": "Les modèles de raisonnement répondent mieux mais prennent plusieurs secondes de plus et consomment une grande part du budget de jetons avant de répondre. Désactivé par défaut.",
+                "max_tokens": "Longueur maximale d'une réponse. Les modèles de raisonnement en consomment beaucoup avant de répondre : ne la réglez pas trop bas.",
+                "timeout": "Temps d'attente entre deux jetons reçus avant d'abandonner.",
+                "tool_mode": "Natif utilise l'appel d'outils du point de terminaison et convient à vLLM, SGLang et LiteLLM. Dans l'invite décrit les outils dans l'invite et lit l'appel dans la réponse, pour les petits modèles dont le serveur n'en propose aucun : c'est moins fiable et la réponse ne peut être lue qu'une fois complète. Aucun laisse l'agent parler sans agir.",
+                "language": "Laissez vide pour répondre dans la langue employée. En choisissant une langue, l'agent y répond toujours. Attention : la voix de synthèse de votre assistant a sa propre langue ; si elles diffèrent, un texte correct sera lu avec le mauvais accent.",
+                "temperature": "Laissé à sa valeur par défaut, ce paramètre n'est pas envoyé et celui du serveur s'applique. Certains fournisseurs refusent une requête définissant à la fois la température et Top P."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Configurez le fournisseur avant d'y ajouter des modèles."
+      }
+    },
+    "ai_task_data": {
+      "title": "Modèle AI Task",
+      "initiate_flow": {
+        "user": "Ajouter un modèle AI Task",
+        "reconfigure": "Reconfigurer le modèle AI Task"
+      },
+      "entry_type": "AI Task",
+      "step": {
+        "user": {
+          "title": "Choisir un modèle",
+          "description": "Choisissez un modèle pour générer des données. Il est ensuite testé pour voir ce qu'il prend en charge.",
+          "data": {
+            "name": "Nom",
+            "model": "Modèle"
+          },
+          "data_description": {
+            "name": "Affiché dans Home Assistant, par exemple Voix ou Bureau.",
+            "model": "Choisi parmi ce que propose le fournisseur. Saisissez un nom s'il n'apparaît pas."
+          }
+        },
+        "settings": {
+          "title": "Paramètres du modèle",
+          "description": "{model}\n\nLit les images : {vision}",
+          "data": {
+            "advanced": "Avancé"
+          },
+          "data_description": {},
+          "sections": {
+            "advanced": {
+              "name": "Avancé",
+              "data": {
+                "vision": "Envoyer des images à ce modèle",
+                "thinking": "Laisser le modèle réfléchir d'abord",
+                "max_tokens": "Nombre maximal de jetons en réponse",
+                "temperature": "Température",
+                "top_p": "Top P",
+                "timeout": "Délai d'attente de réponse (secondes)",
+                "language": "Toujours répondre en"
+              },
+              "data_description": {
+                "vision": "Déterminé en testant le modèle. Les serveurs acceptent les images même pour les modèles texte et les ignorent sans rien dire ; la mesure porte donc sur le coût en jetons d'une image. Désactivez-le si vous préférez ne pas envoyer d'images de caméra.",
+                "thinking": "Les modèles de raisonnement répondent mieux mais prennent plusieurs secondes de plus et consomment une grande part du budget de jetons avant de répondre. Désactivé par défaut.",
+                "max_tokens": "Longueur maximale d'une réponse. Les modèles de raisonnement en consomment beaucoup avant de répondre : ne la réglez pas trop bas.",
+                "timeout": "Temps d'attente entre deux jetons reçus avant d'abandonner.",
+                "language": "Laissez vide pour répondre dans la langue employée. En choisissant une langue, l'agent y répond toujours. Attention : la voix de synthèse de votre assistant a sa propre langue ; si elles diffèrent, un texte correct sera lu avec le mauvais accent.",
+                "temperature": "Laissé à sa valeur par défaut, ce paramètre n'est pas envoyé et celui du serveur s'applique. Certains fournisseurs refusent une requête définissant à la fois la température et Top P."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Configurez le fournisseur avant d'y ajouter des modèles."
+      }
+    }
+  },
+  "selector": {
+    "tool_mode": {
+      "options": {
+        "native": "Appel d'outils natif",
+        "prompted": "Décrit dans l'invite",
+        "none": "Aucun outil"
+      }
+    }
+  }
+}

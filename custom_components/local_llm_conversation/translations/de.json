@@ -1,0 +1,179 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit deinem LLM-Anbieter verbinden",
+        "description": "Richte dies auf einen OpenAI-kompatiblen Server, etwa vLLM, SGLang, LiteLLM oder fastllm proxy. Die URL darf nur der Host sein; /v1 wird ergänzt, falls es fehlt.\n\nModelle fügst du diesem Anbieter im nächsten Schritt hinzu.",
+        "data": {
+          "base_url": "Basis-URL",
+          "api_key": "API-Schlüssel"
+        },
+        "data_description": {
+          "base_url": "Zum Beispiel http://192.168.1.10:8000",
+          "api_key": "Leer lassen, wenn der Endpunkt keine Authentifizierung benötigt."
+        }
+      },
+      "reconfigure": {
+        "title": "Anbietereinstellungen",
+        "description": "Endpunkt oder API-Schlüssel ändern. Die Modelle dieses Anbieters bleiben erhalten.",
+        "data": {
+          "base_url": "Basis-URL",
+          "api_key": "API-Schlüssel"
+        },
+        "data_description": {
+          "base_url": "Zum Beispiel http://192.168.1.10:8000",
+          "api_key": "Leer lassen, wenn der Endpunkt keine Authentifizierung benötigt."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Anbieterschlüssel abgelehnt",
+        "description": "{base_url} hat den gespeicherten API-Schlüssel abgelehnt. Gib einen aktuellen ein.",
+        "data": {
+          "api_key": "API-Schlüssel"
+        },
+        "data_description": {
+          "api_key": "Leer lassen, wenn der Endpunkt keine Authentifizierung mehr benötigt."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Der Endpunkt ist nicht erreichbar. Prüfe die URL und ob der Server läuft.",
+      "invalid_auth": "Der Endpunkt hat diesen API-Schlüssel abgelehnt."
+    },
+    "abort": {
+      "already_configured": "Dieser Endpunkt ist bereits eingerichtet. Füge ihm stattdessen ein Modell hinzu.",
+      "reconfigure_successful": "Anbieter aktualisiert.",
+      "reauth_successful": "Anbieterschlüssel aktualisiert."
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "title": "Modell",
+      "initiate_flow": {
+        "user": "Modell hinzufügen",
+        "reconfigure": "Modell neu konfigurieren"
+      },
+      "entry_type": "Konversationsagent",
+      "step": {
+        "user": {
+          "title": "Modell auswählen",
+          "description": "Wähle ein Modell des Anbieters. Anschließend wird geprüft, was es unterstützt.",
+          "data": {
+            "name": "Name",
+            "model": "Modell"
+          },
+          "data_description": {
+            "name": "In Home Assistant angezeigt, zum Beispiel Sprache oder Arbeitszimmer.",
+            "model": "Aus dem Angebot des Anbieters gewählt. Tippe einen Namen ein, wenn er nicht aufgeführt ist."
+          }
+        },
+        "settings": {
+          "title": "Modelleinstellungen",
+          "description": "{model}\n\nLiest Bilder: {vision}",
+          "data": {
+            "llm_hass_api": "Home Assistant steuern",
+            "assistant_name": "Name des Assistenten",
+            "advanced": "Erweitert"
+          },
+          "data_description": {
+            "llm_hass_api": "Welche Tool-APIs das Modell verwenden darf. Ohne eine kann es reden, aber nichts tun.",
+            "assistant_name": "Wie sich der Agent nennt. Passend zum Aktivierungswort wählen."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Erweitert",
+              "data": {
+                "prompt": "Seele",
+                "vision": "Bilder an dieses Modell senden",
+                "thinking": "Das Modell zuerst nachdenken lassen",
+                "max_tokens": "Maximale Tokenzahl der Antwort",
+                "temperature": "Temperatur",
+                "top_p": "Top P",
+                "timeout": "Zeitlimit für Antworten (Sekunden)",
+                "tool_mode": "Wie das Modell Tools aufruft",
+                "language": "Immer antworten auf"
+              },
+              "data_description": {
+                "prompt": "Die Persönlichkeit des Agenten. {name} wird durch den Namen oben ersetzt.",
+                "vision": "Durch Testen des Modells ermittelt. Server nehmen Bilder auch für reine Textmodelle an und verwerfen sie stillschweigend, daher wird gemessen, ob ein Bild Prompt-Tokens kostet. Schalte es aus, wenn du keine Kamerabilder senden möchtest.",
+                "thinking": "Reasoning-Modelle antworten besser, brauchen aber Sekunden länger und verbrauchen einen Großteil des Tokenbudgets vor der Antwort. Standardmäßig aus.",
+                "max_tokens": "Wie lang eine Antwort sein darf. Reasoning-Modelle verbrauchen davon viel vor der Antwort, setze es also nicht niedrig.",
+                "timeout": "Wie lange zwischen gestreamten Tokens gewartet wird, bevor abgebrochen wird.",
+                "tool_mode": "Nativ nutzt das Tool-Aufrufen des Endpunkts und ist richtig für vLLM, SGLang und LiteLLM. Im Prompt beschreibt die Tools im Prompt und liest den Aufruf aus der Antwort; gedacht für kleine Modelle, deren Server keine Tools bietet. Das ist weniger zuverlässig, und die Antwort kann erst gesprochen werden, wenn sie vollständig ist. Keine lässt den Agenten reden, ohne zu handeln.",
+                "language": "Leer lassen, um in der Sprache zu antworten, in der gefragt wurde. Mit einer gewählten Sprache antwortet der Agent immer in dieser. Beachte: Die Sprachausgabe deines Assistenten hat eine eigene Spracheinstellung; stimmen beide nicht überein, wird korrekter Text mit falschem Akzent vorgelesen.",
+                "temperature": "Beim Standardwert wird dies nicht mitgesendet und der Standard des Servers gilt. Manche Anbieter lehnen eine Anfrage ab, die Temperatur und Top P zugleich setzt."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Richte den Anbieter ein, bevor du ihm Modelle hinzufügst."
+      }
+    },
+    "ai_task_data": {
+      "title": "AI-Task-Modell",
+      "initiate_flow": {
+        "user": "AI-Task-Modell hinzufügen",
+        "reconfigure": "AI-Task-Modell neu konfigurieren"
+      },
+      "entry_type": "AI Task",
+      "step": {
+        "user": {
+          "title": "Modell auswählen",
+          "description": "Wähle ein Modell zum Erzeugen von Daten. Anschließend wird geprüft, was es unterstützt.",
+          "data": {
+            "name": "Name",
+            "model": "Modell"
+          },
+          "data_description": {
+            "name": "In Home Assistant angezeigt, zum Beispiel Sprache oder Arbeitszimmer.",
+            "model": "Aus dem Angebot des Anbieters gewählt. Tippe einen Namen ein, wenn er nicht aufgeführt ist."
+          }
+        },
+        "settings": {
+          "title": "Modelleinstellungen",
+          "description": "{model}\n\nLiest Bilder: {vision}",
+          "data": {
+            "advanced": "Erweitert"
+          },
+          "data_description": {},
+          "sections": {
+            "advanced": {
+              "name": "Erweitert",
+              "data": {
+                "vision": "Bilder an dieses Modell senden",
+                "thinking": "Das Modell zuerst nachdenken lassen",
+                "max_tokens": "Maximale Tokenzahl der Antwort",
+                "temperature": "Temperatur",
+                "top_p": "Top P",
+                "timeout": "Zeitlimit für Antworten (Sekunden)",
+                "language": "Immer antworten auf"
+              },
+              "data_description": {
+                "vision": "Durch Testen des Modells ermittelt. Server nehmen Bilder auch für reine Textmodelle an und verwerfen sie stillschweigend, daher wird gemessen, ob ein Bild Prompt-Tokens kostet. Schalte es aus, wenn du keine Kamerabilder senden möchtest.",
+                "thinking": "Reasoning-Modelle antworten besser, brauchen aber Sekunden länger und verbrauchen einen Großteil des Tokenbudgets vor der Antwort. Standardmäßig aus.",
+                "max_tokens": "Wie lang eine Antwort sein darf. Reasoning-Modelle verbrauchen davon viel vor der Antwort, setze es also nicht niedrig.",
+                "timeout": "Wie lange zwischen gestreamten Tokens gewartet wird, bevor abgebrochen wird.",
+                "language": "Leer lassen, um in der Sprache zu antworten, in der gefragt wurde. Mit einer gewählten Sprache antwortet der Agent immer in dieser. Beachte: Die Sprachausgabe deines Assistenten hat eine eigene Spracheinstellung; stimmen beide nicht überein, wird korrekter Text mit falschem Akzent vorgelesen.",
+                "temperature": "Beim Standardwert wird dies nicht mitgesendet und der Standard des Servers gilt. Manche Anbieter lehnen eine Anfrage ab, die Temperatur und Top P zugleich setzt."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Richte den Anbieter ein, bevor du ihm Modelle hinzufügst."
+      }
+    }
+  },
+  "selector": {
+    "tool_mode": {
+      "options": {
+        "native": "Natives Tool-Aufrufen",
+        "prompted": "Im Prompt beschrieben",
+        "none": "Keine Tools"
+      }
+    }
+  }
+}

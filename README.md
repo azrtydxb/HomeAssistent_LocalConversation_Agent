@@ -223,6 +223,16 @@ Diagnostics can be downloaded from the provider's menu for bug reports. The API
 key is redacted, and the soul is reported by length rather than content, since a
 household may have written something personal into it.
 
+## Translations
+
+The configuration UI is available in English, Dutch, German and French.
+
+The translations are mine and have not been checked by a native speaker.
+Corrections are welcome, as are new languages: `strings.json` is the source, and a
+translation is one file under `translations/` with the same structure. Tests check
+that every string is covered and that no `{placeholder}` has been dropped or
+renamed, so a partial file fails rather than showing raw keys in the UI.
+
 ## Development
 
 ```bash
