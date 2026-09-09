@@ -80,7 +80,13 @@ async def test_tool_calls_emitted_once_arguments_are_complete() -> None:
                     ]
                 }
             },
-            {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": '"kitchen"}'}}]}},
+            {
+                "delta": {
+                    "tool_calls": [
+                        {"index": 0, "function": {"arguments": '"kitchen"}'}}
+                    ]
+                }
+            },
         ]
     )
     tool_deltas = [d for d in deltas if "tool_calls" in d]
@@ -96,7 +102,9 @@ async def test_tool_call_ids_survive_the_round_trip() -> None:
     assistant = conversation.AssistantContent(
         agent_id="conversation.test",
         tool_calls=[
-            llm.ToolInput(id="call_9", tool_name="HassTurnOn", tool_args={"name": "lamp"})
+            llm.ToolInput(
+                id="call_9", tool_name="HassTurnOn", tool_args={"name": "lamp"}
+            )
         ],
     )
     result = conversation.ToolResultContent(
@@ -180,8 +188,20 @@ async def test_real_endpoint_tool_call_shape() -> None:
                     ]
                 }
             },
-            {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": '{"name": "k'}}]}},
-            {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "itchen light"}}]}},
+            {
+                "delta": {
+                    "tool_calls": [
+                        {"index": 0, "function": {"arguments": '{"name": "k'}}
+                    ]
+                }
+            },
+            {
+                "delta": {
+                    "tool_calls": [
+                        {"index": 0, "function": {"arguments": "itchen light"}}
+                    ]
+                }
+            },
             {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": '"}'}}]}},
             {"delta": {}, "finish_reason": "tool_calls"},
         ]
@@ -191,3 +211,32 @@ async def test_real_endpoint_tool_call_shape() -> None:
     assert tool_call.tool_name == "HassTurnOn"
     assert tool_call.tool_args == {"name": "kitchen light"}
     assert tool_call.id == "chatcmpl-tool-86d0a8fc6dafce15"
+
+
+async def test_tools_are_formatted_with_the_serializer_home_assistant_supplies() -> (
+    None
+):
+    """Guards the schema-conversion library, which changed between HA releases.
+
+    2025.9 used voluptuous-openapi; 2026.x uses probatio, and llm.selector_serializer
+    emits whichever format that release expects. Importing the wrong one broke setup
+    at import time while every other test still passed.
+    """
+    import voluptuous as vol
+
+    from custom_components.local_llm_conversation.conversation import _format_tool
+
+    class FakeTool(llm.Tool):
+        name = "HassTurnOn"
+        description = "Turns on a device"
+        parameters = vol.Schema({vol.Required("name"): str})
+
+    formatted = _format_tool(FakeTool(), llm.selector_serializer)
+
+    assert formatted["type"] == "function"
+    assert formatted["function"]["name"] == "HassTurnOn"
+    assert formatted["function"]["description"] == "Turns on a device"
+    params = formatted["function"]["parameters"]
+    assert params["type"] == "object"
+    assert "name" in params["properties"]
+    assert params["required"] == ["name"]

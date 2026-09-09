@@ -13,7 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from voluptuous_openapi import convert
+
+try:  # Home Assistant 2026.1 and later
+    from probatio import to_openapi
+except ImportError:  # Home Assistant 2025.9 to 2025.12
+    from voluptuous_openapi import convert as to_openapi
 
 from .client import ChatCompletionsClient
 from .const import (
@@ -49,7 +53,7 @@ def _format_tool(
     """Render a Home Assistant tool as an OpenAI function definition."""
     function: dict[str, Any] = {
         "name": tool.name,
-        "parameters": convert(tool.parameters, custom_serializer=custom_serializer),
+        "parameters": to_openapi(tool.parameters, custom_serializer=custom_serializer),
     }
     if tool.description:
         function["description"] = tool.description
