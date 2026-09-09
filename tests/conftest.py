@@ -1,5 +1,7 @@
 """Fixtures for the Local LLM Conversation tests."""
 
+from pathlib import Path
+
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -18,9 +20,9 @@ def clean_knowledge_directory(hass):
     The config directory is shared across the test session, so a file written by
     one test otherwise changes the form another test renders.
     """
-    from custom_components.local_llm_conversation.knowledge import knowledge_path
-
-    directory = knowledge_path(hass)
+    # The path is spelled out rather than imported: importing the component here
+    # would force every test to load it, including ones that only read files.
+    directory = Path(hass.config.path("local_llm_conversation")) / "knowledge"
     if directory.is_dir():
         for path in directory.iterdir():
             if path.is_file():

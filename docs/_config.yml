@@ -1,0 +1,6 @@
+title: Local LLM Conversation
+description: >-
+  A Home Assistant conversation agent for any OpenAI-compatible endpoint,
+  built for local models.
+theme: jekyll-theme-cayman
+show_downloads: false
