@@ -73,11 +73,13 @@
           "data": {
             "llm_hass_api": "Home Assistant steuern",
             "assistant_name": "Name des Assistenten",
-            "advanced": "Erweitert"
+            "advanced": "Erweitert",
+            "knowledge": "Was es über dieses Haus weiß"
           },
           "data_description": {
             "llm_hass_api": "Welche Tool-APIs das Modell verwenden darf. Ohne eine kann es reden, aber nichts tun.",
-            "assistant_name": "Wie sich der Agent nennt. Passend zum Aktivierungswort wählen."
+            "assistant_name": "Wie sich der Agent nennt. Passend zum Aktivierungswort wählen.",
+            "knowledge": "Dateien aus config/local_llm_conversation/knowledge/, für diesen Agenten aktiviert. Für Fakten über dein Haus, die nicht in die Seele gehören: wie die Heizung funktioniert, was ein seltsam benannter Sensor bedeutet. Jede aktivierte Datei wird bei jeder Anfrage in den Prompt aufgenommen, auch bei „mach das Küchenlicht an“ – aktiviere also nur, was sich lohnt."
           },
           "sections": {
             "advanced": {

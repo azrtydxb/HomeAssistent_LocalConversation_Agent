@@ -73,11 +73,13 @@
           "data": {
             "llm_hass_api": "Contrôler Home Assistant",
             "assistant_name": "Nom de l'assistant",
-            "advanced": "Avancé"
+            "advanced": "Avancé",
+            "knowledge": "Ce qu'il sait de cette maison"
           },
           "data_description": {
             "llm_hass_api": "Quelles API d'outils le modèle peut utiliser. Sans aucune, il peut parler mais pas agir.",
-            "assistant_name": "Le nom que l'agent se donne. Alignez-le sur votre mot d'activation."
+            "assistant_name": "Le nom que l'agent se donne. Alignez-le sur votre mot d'activation.",
+            "knowledge": "Fichiers de config/local_llm_conversation/knowledge/, activés pour cet agent. Pour les faits propres à votre maison qui n'ont pas leur place dans l'âme : le fonctionnement du chauffage, la signification d'un capteur au nom obscur. Chaque fichier activé est ajouté à l'invite à chaque requête, y compris pour « allume la lumière de la cuisine » : n'activez que ce qui le mérite."
           },
           "sections": {
             "advanced": {

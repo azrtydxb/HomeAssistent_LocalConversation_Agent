@@ -10,8 +10,9 @@ from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, SUBENTRY_TYPE_CONVERSATION
+from .const import CONF_KNOWLEDGE, DOMAIN, SUBENTRY_TYPE_CONVERSATION
 from .entity import LocalLLMBaseEntity
+from .knowledge import async_render as async_render_knowledge
 from .memory import API_ID as MEMORY_API_ID, async_get_store, format_memories
 
 
@@ -48,8 +49,12 @@ class LocalLLMConversationEntity(conversation.ConversationEntity, LocalLLMBaseEn
         added only when memory is switched on, so nothing appears from a setting
         someone did not choose.
         """
+        settings = self._settings
         prompt = self._soul
-        if MEMORY_API_ID in (self._settings.get(CONF_LLM_HASS_API) or []):
+        prompt += await async_render_knowledge(
+            self.hass, settings.get(CONF_KNOWLEDGE) or []
+        )
+        if MEMORY_API_ID in (settings.get(CONF_LLM_HASS_API) or []):
             prompt += format_memories(await async_get_store(self.hass).async_all())
         return prompt
 

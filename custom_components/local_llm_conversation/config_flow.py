@@ -40,9 +40,11 @@ from homeassistant.helpers.selector import (
 )
 
 from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
+from .knowledge import async_available as async_available_knowledge
 from .const import (
     CONF_ADVANCED,
     CONF_ASSISTANT_NAME,
+    CONF_KNOWLEDGE,
     CONF_LANGUAGE,
     CONF_BASE_URL,
     CONF_MAX_TOKENS,
@@ -298,7 +300,9 @@ class ModelSubentryFlow(ConfigSubentryFlow):
 
         return self.async_show_form(
             step_id="settings",
-            data_schema=self._schema(self._current()),
+            data_schema=self._schema(
+                self._current(), await async_available_knowledge(self.hass)
+            ),
             description_placeholders={
                 "model": self._chosen[CONF_MODEL],
                 "vision": _describe_vision(self._vision),
@@ -312,7 +316,9 @@ class ModelSubentryFlow(ConfigSubentryFlow):
         """A task worker generates data and has no persona to speak with."""
         return self._subentry_type == SUBENTRY_TYPE_CONVERSATION
 
-    def _schema(self, current: dict[str, Any]) -> vol.Schema:
+    def _schema(
+        self, current: dict[str, Any], knowledge: list[str] | None = None
+    ) -> vol.Schema:
         """Build the form: everyday settings first, the rest folded away."""
         advanced = dict(current.get(CONF_ADVANCED, {}))
         # Never offer images to a model that has just been shown to ignore them,
@@ -351,6 +357,26 @@ class ModelSubentryFlow(ConfigSubentryFlow):
                     ): str,
                 }
             )
+            if knowledge:
+                # Offered only when the household has written something; an empty
+                # picker is a question with no answers.
+                schema[
+                    vol.Optional(
+                        CONF_KNOWLEDGE,
+                        description={
+                            "suggested_value": current.get(CONF_KNOWLEDGE, [])
+                        },
+                    )
+                ] = SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(label=name, value=name)
+                            for name in knowledge
+                        ],
+                        multiple=True,
+                        sort=True,
+                    )
+                )
 
         inner: dict[Any, Any] = {}
         if self._is_conversation:
@@ -365,6 +391,7 @@ class ModelSubentryFlow(ConfigSubentryFlow):
         inner.update(
             {
                 vol.Optional(
+                    CONF_KNOWLEDGE,
                     CONF_LANGUAGE,
                     description={"suggested_value": advanced.get(CONF_LANGUAGE)},
                 ): LanguageSelector(LanguageSelectorConfig(native_name=True)),

@@ -73,11 +73,13 @@
           "data": {
             "llm_hass_api": "Control Home Assistant",
             "assistant_name": "Assistant name",
-            "advanced": "Advanced"
+            "advanced": "Advanced",
+            "knowledge": "What it knows about this house"
           },
           "data_description": {
             "llm_hass_api": "Which tool APIs the model may use. Without one it can talk but not act.",
-            "assistant_name": "What the agent calls itself. Match your wake word so it stays consistent."
+            "assistant_name": "What the agent calls itself. Match your wake word so it stays consistent.",
+            "knowledge": "Files from config/local_llm_conversation/knowledge/, enabled for this agent. Use for facts about your house that the soul should not carry: how the heating works, what an oddly named sensor means. Every enabled file is added to the prompt on every request, including 'turn on the kitchen light', so enable only what earns it."
           },
           "sections": {
             "advanced": {

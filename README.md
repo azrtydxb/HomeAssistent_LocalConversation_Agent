@@ -166,6 +166,22 @@ zero.
 The recorder and energy integrations are optional. Without them the agent still
 works and the tools say plainly what is missing.
 
+## What it knows about this house
+
+The soul says who the agent is. Knowledge files say what it knows about your
+particular house: how the heating is zoned, what an oddly named sensor means, the
+rules for the holiday cottage.
+
+Put markdown files in `config/local_llm_conversation/knowledge/` and enable them
+per agent under Advanced. The picker only appears once you have written something.
+
+Every enabled file is added to the prompt on **every** request, including "turn on
+the kitchen light", and prompt size is what drives time to first token — so enable
+only what earns it. Files over 32 KB are skipped for the same reason.
+
+This is deliberately just files and a picker. There is no download service and no
+registry: if editing the soul covers what you need, use the soul.
+
 ## Memory
 
 Selecting **Memory (remembers between chats)** lets the agent keep things across

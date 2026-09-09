@@ -41,6 +41,9 @@ CONF_SUPPORTS_TOOLS = "supports_tools"
 # Empty means answer in whatever language the request came in.
 CONF_LANGUAGE = "language"
 
+# Knowledge files enabled for one agent, by name.
+CONF_KNOWLEDGE = "knowledge"
+
 CONF_VISION = "vision"
 
 CONF_THINKING = "thinking"

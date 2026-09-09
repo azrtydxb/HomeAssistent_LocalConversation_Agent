@@ -73,11 +73,13 @@
           "data": {
             "llm_hass_api": "Home Assistant bedienen",
             "assistant_name": "Naam van de assistent",
-            "advanced": "Geavanceerd"
+            "advanced": "Geavanceerd",
+            "knowledge": "Wat het weet over dit huis"
           },
           "data_description": {
             "llm_hass_api": "Welke tool-API's het model mag gebruiken. Zonder API kan het praten maar niets doen.",
-            "assistant_name": "Hoe de agent zichzelf noemt. Houd dit gelijk aan je wakewoord."
+            "assistant_name": "Hoe de agent zichzelf noemt. Houd dit gelijk aan je wakewoord.",
+            "knowledge": "Bestanden uit config/local_llm_conversation/knowledge/, ingeschakeld voor deze agent. Bedoeld voor feiten over je huis die niet in de ziel horen: hoe de verwarming werkt, wat een vreemd genoemde sensor betekent. Elk ingeschakeld bestand wordt bij elke aanvraag aan de prompt toegevoegd, ook bij 'doe het keukenlicht aan', dus schakel alleen in wat het waard is."
           },
           "sections": {
             "advanced": {
