@@ -127,3 +127,20 @@ def test_the_minimum_home_assistant_version_matches_hacs() -> None:
     """Two places state it; they disagree silently when one is bumped."""
     version = json.loads(Path("hacs.json").read_text())["homeassistant"]
     assert version in ALL_TEXT, f"documentation does not state the minimum {version}"
+
+
+def test_the_manifest_keys_are_ordered_as_hassfest_requires() -> None:
+    """domain, name, then alphabetical.
+
+    hassfest enforces this and the workflow pins it to @master, so a check added
+    upstream turns a green build red without anything here changing. It happened:
+    a release was tagged from a commit that had passed on main minutes earlier.
+    """
+    manifest = json.loads((COMPONENT / "manifest.json").read_text())
+    keys = list(manifest)
+
+    assert keys[0] == "domain", "domain must come first"
+    assert keys[1] == "name", "name must come second"
+    assert keys[2:] == sorted(keys[2:]), (
+        f"the rest must be alphabetical, got {keys[2:]}"
+    )

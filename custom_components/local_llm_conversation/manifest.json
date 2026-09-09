@@ -1,6 +1,7 @@
 {
   "domain": "local_llm_conversation",
   "name": "Local LLM Conversation",
+  "after_dependencies": ["energy", "recorder"],
   "codeowners": ["@piwi3910"],
   "config_flow": true,
   "dependencies": ["ai_task", "conversation"],
@@ -9,6 +10,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/azrtydxb/HomeAssistent_LocalConversation_Agent/issues",
   "requirements": [],
-  "version": "0.15.0",
-  "after_dependencies": ["energy", "recorder"]
+  "version": "0.15.1"
 }
