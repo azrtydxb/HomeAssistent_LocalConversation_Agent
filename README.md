@@ -34,8 +34,12 @@ install, restart Home Assistant, then add **Local LLM Conversation** from
 _Settings → Devices & services_.
 
 Point it at your endpoint's base URL. `http://192.168.1.10:8000` is enough — the
-`/v1` suffix is added if missing. If the endpoint serves exactly one model it is
-selected automatically.
+`/v1` suffix is added if missing. The integration then asks the endpoint which
+models it serves and offers them in a dropdown; if the server has no `/v1/models`
+listing, or routes a name it does not advertise, you can type one instead.
+
+Add the integration once per model if you want several agents — a fast local
+model for voice and a larger one for harder questions, say.
 
 To use it, assign the agent to a voice assistant in
 _Settings → Voice assistants_.

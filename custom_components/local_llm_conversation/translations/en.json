@@ -3,21 +3,30 @@
     "step": {
       "user": {
         "title": "Connect to your LLM endpoint",
-        "description": "Point this at any OpenAI-compatible server, such as vLLM, SGLang, LiteLLM or fastllm proxy. The URL may be the host on its own; /v1 is added if missing.\n\nModels found: {models}",
+        "description": "Point this at any OpenAI-compatible server, such as vLLM, SGLang, LiteLLM or fastllm proxy. The URL may be the host on its own; /v1 is added if missing.",
         "data": {
           "base_url": "Base URL",
-          "api_key": "API key",
-          "model": "Model"
+          "api_key": "API key"
         },
         "data_description": {
           "base_url": "For example http://192.168.1.10:8000",
-          "api_key": "Leave empty if the endpoint needs no authentication.",
-          "model": "Leave empty to use the endpoint's only model."
+          "api_key": "Leave empty if the endpoint needs no authentication."
+        }
+      },
+      "model": {
+        "title": "Choose a model",
+        "description": "The endpoint offers {count} model(s). Pick one, or type a name if the model you want is not listed.",
+        "data": {
+          "model": "Model"
         }
       }
     },
     "error": {
-      "model_required": "The endpoint serves more than one model, or did not list any. Enter a model name."
+      "cannot_connect": "Could not reach that endpoint. Check the URL and that the server is running.",
+      "invalid_auth": "The endpoint rejected that API key."
+    },
+    "abort": {
+      "already_configured": "That model on that endpoint is already set up."
     }
   },
   "options": {

@@ -17,6 +17,15 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import LOGGER
 
+
+class CannotConnect(HomeAssistantError):
+    """The endpoint could not be reached at all."""
+
+
+class InvalidAuth(HomeAssistantError):
+    """The endpoint rejected the API key."""
+
+
 _DONE = "[DONE]"
 # Enough of an error body to identify the problem without flooding the log.
 _MAX_ERROR_BODY = 500
@@ -64,8 +73,10 @@ class ChatCompletionsClient:
     async def async_list_models(self) -> list[str]:
         """Return the model ids the endpoint advertises.
 
-        Not every deployment exposes ``/v1/models``; callers fall back to a
-        free-text model field when this returns nothing.
+        Raises CannotConnect if the endpoint is unreachable and InvalidAuth if it
+        rejects the key. An empty list means the endpoint answered but does not
+        expose a model listing, which is not an error: the model is then typed in
+        by hand.
         """
         try:
             async with self._session.get(
@@ -73,18 +84,32 @@ class ChatCompletionsClient:
                 headers=self._headers,
                 timeout=self._timeout,
             ) as response:
+                if response.status in (401, 403):
+                    raise InvalidAuth(
+                        f"Endpoint rejected the API key ({response.status})"
+                    )
                 if response.status != 200:
+                    LOGGER.debug(
+                        "%s/models returned %s; the model must be entered by hand",
+                        self._base_url,
+                        response.status,
+                    )
                     return []
-                payload = await response.json()
-        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            LOGGER.debug("Could not list models from %s: %s", self._base_url, err)
+                payload = await response.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise CannotConnect(f"Could not reach {self._base_url}: {err}") from err
+        except ValueError as err:
+            # Reachable, but not speaking the OpenAI API.
+            LOGGER.debug("%s/models returned unparseable JSON: %s", self._base_url, err)
             return []
 
-        return [
+        if not isinstance(payload, dict):
+            return []
+        return sorted(
             model["id"]
             for model in payload.get("data", [])
             if isinstance(model, dict) and model.get("id")
-        ]
+        )
 
     async def async_stream_chat(
         self, payload: dict[str, Any]
@@ -115,7 +140,9 @@ class ChatCompletionsClient:
                 "Timed out waiting for the LLM endpoint to respond"
             ) from err
         except aiohttp.ClientError as err:
-            raise HomeAssistantError(f"Could not reach the LLM endpoint: {err}") from err
+            raise HomeAssistantError(
+                f"Could not reach the LLM endpoint: {err}"
+            ) from err
 
 
 def _parse_sse_line(raw: bytes) -> dict[str, Any] | None:
