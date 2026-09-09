@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from . import LocalLLMConfigEntry
 from .client import CannotConnect, InvalidAuth
 from .const import CONF_ADVANCED, CONF_PROMPT
+from .memory import async_get_store
 
 TO_REDACT = {CONF_API_KEY}
 
@@ -30,7 +31,11 @@ async def async_get_config_entry_diagnostics(
     except CannotConnect as err:
         models = f"endpoint unreachable: {err}"
 
+    # Count only: memories are what a household told the agent about itself.
+    memories = await async_get_store(hass).async_all()
+
     return {
+        "memories_kept": len(memories),
         "entry": {
             "version": entry.version,
             "data": async_redact_data(dict(entry.data), TO_REDACT),

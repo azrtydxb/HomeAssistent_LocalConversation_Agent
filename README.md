@@ -166,6 +166,32 @@ zero.
 The recorder and energy integrations are optional. Without them the agent still
 works and the tools say plainly what is missing.
 
+## Memory
+
+Selecting **Memory (remembers between chats)** lets the agent keep things across
+conversations — who lives here, a preference, a decision. It decides what to keep,
+using a `Remember` tool, and can `Forget` on request.
+
+Memories are put into the prompt rather than fetched with a tool, because a model
+does not know to ask for something it does not know exists. They are shared by
+every agent on every provider: a household has one butler however many models sit
+behind it. They are capped at 50 — every memory is paid for in prompt tokens on
+every turn — and the oldest is dropped when that is exceeded.
+
+Nothing is remembered unless you switch this on. Diagnostics report how many
+memories are kept, never their content.
+
+## Suggesting automations
+
+Selecting **Suggest automations (needs approval)** lets the agent draft one. It
+cannot create one.
+
+The draft is validated by Home Assistant and then raised as a notification for you
+to read and add. A draft that does not validate goes back to the model to fix
+rather than in front of you. Everything else the agent does is undone by saying
+the opposite; an automation persists, runs unattended, and a misunderstanding can
+act at three in the morning for months before anyone notices.
+
 ## AI Task
 
 A provider can also carry **AI Task** models, which generate data for automations

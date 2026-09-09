@@ -21,7 +21,9 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
+from .automation_api import AutomationAPI
 from .history_api import HistoryAPI
+from .memory import MemoryAPI
 from .const import (
     CONF_ADVANCED,
     CONF_BASE_URL,
@@ -57,6 +59,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     a set of tools, not a connection, and registering it twice fails.
     """
     llm.async_register_api(hass, HistoryAPI(hass))
+    llm.async_register_api(hass, MemoryAPI(hass))
+    llm.async_register_api(hass, AutomationAPI(hass))
     return True
 
 

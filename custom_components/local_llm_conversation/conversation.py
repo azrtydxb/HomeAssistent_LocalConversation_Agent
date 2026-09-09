@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, SUBENTRY_TYPE_CONVERSATION
 from .entity import LocalLLMBaseEntity
+from .memory import API_ID as MEMORY_API_ID, async_get_store, format_memories
 
 
 async def async_setup_entry(
@@ -39,6 +40,19 @@ class LocalLLMConversationEntity(conversation.ConversationEntity, LocalLLMBaseEn
         """Return the supported languages."""
         return MATCH_ALL
 
+    async def _async_prompt(self) -> str:
+        """Return the soul, with anything remembered added to it.
+
+        Memories are put in the prompt rather than fetched with a tool: a model
+        does not know to ask for something it does not know exists. They are
+        added only when memory is switched on, so nothing appears from a setting
+        someone did not choose.
+        """
+        prompt = self._soul
+        if MEMORY_API_ID in (self._settings.get(CONF_LLM_HASS_API) or []):
+            prompt += format_memories(await async_get_store(self.hass).async_all())
+        return prompt
+
     async def _async_handle_message(
         self,
         user_input: conversation.ConversationInput,
@@ -49,7 +63,7 @@ class LocalLLMConversationEntity(conversation.ConversationEntity, LocalLLMBaseEn
             await chat_log.async_provide_llm_data(
                 user_input.as_llm_context(DOMAIN),
                 self._settings.get(CONF_LLM_HASS_API),
-                self._soul,
+                await self._async_prompt(),
                 user_input.extra_system_prompt,
             )
         except conversation.ConverseError as err:
