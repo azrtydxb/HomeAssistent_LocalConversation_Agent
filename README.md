@@ -154,8 +154,14 @@ it confidently as the whole. When a result has been thinned it says so, so the
 agent can tell you it is looking at a sample.
 
 Entities are subject to the same exposure rule as everything else: history cannot
-be used to read something you did not expose. Energy uses the sources configured
-in the energy dashboard.
+be used to read something you did not expose.
+
+`GetEnergy` reads only the **grid** sources in the energy dashboard. Dashboards
+commonly carry water and gas meters too, whose readings are litres and cubic
+metres; adding those into a kilowatt-hour total gives a confident, wrong number.
+When nothing is recorded for the period it says so rather than reporting zero —
+no data and no consumption are different answers, and a model told zero will say
+zero.
 
 The recorder and energy integrations are optional. Without them the agent still
 works and the tools say plainly what is missing.

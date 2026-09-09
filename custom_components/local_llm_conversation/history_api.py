@@ -229,9 +229,9 @@ class GetEnergyTool(llm.Tool):
 
     name = "GetEnergy"
     description = (
-        "Get electricity consumption per day, totalled across the sources "
-        "configured in the energy dashboard. Use for questions about power or "
-        "electricity use."
+        "Get electricity consumption per day, in kilowatt-hours, totalled across "
+        "the grid sources configured in the energy dashboard. Use for questions "
+        "about power or electricity use."
     )
     parameters = vol.Schema(
         {
@@ -260,7 +260,7 @@ class GetEnergyTool(llm.Tool):
 
         stat_ids = _consumption_statistics(manager.data)
         if not stat_ids:
-            return {"error": "No electricity sources are configured."}
+            return {"error": "The energy dashboard has no grid electricity source."}
 
         days = min(int(tool_input.tool_args.get("days", 7)), MAX_ENERGY_DAYS)
         start = dt_util.utcnow() - timedelta(days=days)
@@ -280,6 +280,18 @@ class GetEnergyTool(llm.Tool):
                     day = _stat_time(row.get("start"))[:10]
                     per_day[day] = per_day.get(day, 0.0) + change
 
+        if not per_day:
+            # Nothing recorded is not the same as nothing used, and a model told
+            # zero will say zero. Say which it is.
+            return {
+                "days": days,
+                "sources": len(stat_ids),
+                "error": (
+                    "No electricity readings are recorded for that period. This "
+                    "is not the same as no electricity being used."
+                ),
+            }
+
         daily = [
             {"day": day, "consumption": round(total, 2)}
             for day, total in sorted(per_day.items())
@@ -291,19 +303,24 @@ class GetEnergyTool(llm.Tool):
             "daily": sampled,
             "sampled": was_sampled,
             "total": round(sum(per_day.values()), 2),
+            "unit": "kWh",
         }
 
 
 def _consumption_statistics(data: dict[str, Any]) -> set[str]:
-    """Return the statistic ids the energy dashboard counts as consumption."""
-    stat_ids: set[str] = set()
-    for source in data.get("energy_sources", []):
-        for flow in source.get("flow_from", []):
-            if stat_id := flow.get("stat_energy_from"):
-                stat_ids.add(stat_id)
-        if stat_id := source.get("stat_energy_from"):
-            stat_ids.add(stat_id)
-    return stat_ids
+    """Return the electricity drawn from the grid.
+
+    Only grid sources. An energy dashboard commonly also carries water and gas
+    meters, and their readings are in litres and cubic metres - adding those into
+    a kilowatt-hour total produces a confident, wrong number.
+    """
+    return {
+        stat_id
+        for source in data.get("energy_sources", [])
+        if source.get("type") == "grid"
+        for flow in source.get("flow_from", [])
+        if (stat_id := flow.get("stat_energy_from"))
+    }
 
 
 class HistoryAPI(llm.API):

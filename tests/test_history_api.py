@@ -193,8 +193,13 @@ async def test_energy_without_a_dashboard_says_so(hass: HomeAssistant) -> None:
     assert "energy dashboard" in result["error"]
 
 
-def test_consumption_sources_are_read_from_the_dashboard() -> None:
-    """Only what the household configured as consumption, nothing inferred."""
+def test_only_grid_electricity_counts_towards_electricity() -> None:
+    """Energy dashboards carry water and gas meters too.
+
+    Their readings are litres and cubic metres. Adding them into a kilowatt-hour
+    total produces a confident, wrong number, and a real dashboard was found
+    carrying three water meters alongside the grid.
+    """
     data = {
         "energy_sources": [
             {
@@ -204,6 +209,13 @@ def test_consumption_sources_are_read_from_the_dashboard() -> None:
                     {"stat_energy_from": "sensor.grid_import_2"},
                 ],
             },
+            {"type": "water", "stat_energy_from": "sensor.garden_water"},
+            # Defensive: nothing but a grid source should be read for
+            # electricity, whichever shape a future source arrives in.
+            {
+                "type": "water",
+                "flow_from": [{"stat_energy_from": "sensor.mains_water"}],
+            },
             {"type": "gas", "stat_energy_from": "sensor.gas"},
             {"type": "solar", "stat_energy_from": "sensor.solar"},
         ]
@@ -211,8 +223,6 @@ def test_consumption_sources_are_read_from_the_dashboard() -> None:
     assert _consumption_statistics(data) == {
         "sensor.grid_import",
         "sensor.grid_import_2",
-        "sensor.gas",
-        "sensor.solar",
     }
 
 
@@ -282,3 +292,59 @@ async def test_the_tools_carry_their_limits_in_the_schema(hass: HomeAssistant) -
     assert GetHistoryTool.parameters(
         {"entity_id": "sensor.x", "hours": MAX_HISTORY_HOURS}
     )
+
+
+async def test_no_recorded_readings_is_not_reported_as_zero(
+    hass: HomeAssistant,
+) -> None:
+    """A model told zero will say zero, and be wrong.
+
+    Observed on a real house: the grid sensor had no statistics for the period,
+    the tool returned a total of 0, and the agent stated "zero kilowatt-hours"
+    as fact.
+    """
+    from unittest.mock import AsyncMock
+
+    class FakeManager:
+        data = {
+            "energy_sources": [
+                {"type": "grid", "flow_from": [{"stat_energy_from": "sensor.grid"}]}
+            ]
+        }
+
+    with (
+        patch(
+            "homeassistant.components.energy.data.async_get_manager",
+            AsyncMock(return_value=FakeManager()),
+        ),
+        patch(
+            "homeassistant.components.recorder.statistics.statistics_during_period",
+            return_value={},
+        ),
+        patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=_ExecutorStub(hass),
+        ),
+    ):
+        result = await GetEnergyTool().async_call(
+            hass, call(GetEnergyTool, days=3), context()
+        )
+
+    assert "No electricity readings are recorded" in result["error"]
+    assert "total" not in result
+
+
+async def test_a_dashboard_with_only_water_has_no_electricity_source(
+    hass: HomeAssistant,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    class FakeManager:
+        data = {"energy_sources": [{"type": "water", "stat_energy_from": "sensor.w"}]}
+
+    with patch(
+        "homeassistant.components.energy.data.async_get_manager",
+        AsyncMock(return_value=FakeManager()),
+    ):
+        result = await GetEnergyTool().async_call(hass, call(GetEnergyTool), context())
+    assert "no grid electricity source" in result["error"]
