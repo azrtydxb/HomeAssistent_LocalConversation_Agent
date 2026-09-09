@@ -25,6 +25,14 @@ async def setup_dependencies(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "homeassistant", {})
 
 
+@pytest.fixture(autouse=True)
+def endpoint_answers(aioclient_mock):
+    """Setup now reaches the endpoint before claiming the agents work."""
+    for host in ("http://localhost:8000", "http://192.168.1.10:4000/v1"):
+        aioclient_mock.get(f"{host.removesuffix('/v1')}/v1/models", json={"data": []})
+    return aioclient_mock
+
+
 def conversation_entities(hass: HomeAssistant) -> list[str]:
     return [
         state.entity_id

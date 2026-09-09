@@ -78,6 +78,18 @@ list rather than before it, and omits it entirely when the selected API exposes 
 `GetDateTime` tool. This integration adds nothing volatile of its own, so the
 prefix stays stable across turns and prefill stays cheap.
 
+## When things go wrong
+
+The provider is contacted once at startup. If it cannot be reached, Home
+Assistant retries with backoff rather than failing outright; if it rejects the
+key, you are asked for a new one instead of being retried forever. An agent whose
+endpoint has gone away reports itself unavailable rather than waiting for someone
+to speak to it.
+
+Diagnostics can be downloaded from the provider's menu for bug reports. The API
+key is redacted, and the soul is reported by length rather than content, since a
+household may have written something personal into it.
+
 ## Development
 
 ```bash

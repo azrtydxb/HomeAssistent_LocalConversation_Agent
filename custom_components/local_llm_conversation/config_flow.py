@@ -6,6 +6,7 @@ it is a subentry with its own conversation agent.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -108,6 +109,50 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
                 STEP_USER_SCHEMA, user_input or {}
             ),
             errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """The endpoint rejected the stored key."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for a new key, keeping the endpoint and its models."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            client = ChatCompletionsClient(
+                async_get_clientsession(self.hass),
+                entry.data[CONF_BASE_URL],
+                user_input.get(CONF_API_KEY),
+                DEFAULT_TIMEOUT,
+            )
+            try:
+                await client.async_list_models()
+            except InvalidAuth:
+                errors[CONF_API_KEY] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates=user_input
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_API_KEY): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"base_url": entry.data[CONF_BASE_URL]},
         )
 
     async def async_step_reconfigure(

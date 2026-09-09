@@ -115,3 +115,33 @@ name can be resolved when the form is rendered.
   when one can be resolved, injected into the system prompt.
 - Configurable only, no wake-word derivation.
 - Resolve per request from satellite_id/device_id at runtime.
+
+## What to build next
+
+Grounded in concrete gaps in this codebase against Home Assistant 2026.9, not a
+generic wishlist.
+
+Correctness gaps (wrong today):
+
+- No reauth flow. A rotated or revoked key leaves the entry failing with no
+  prompt; Ollama implements `async_step_reauth`.
+- The agent reports available even when the endpoint is unreachable, so a dead
+  provider looks healthy until someone speaks to it.
+- Anyone who upgraded straight to v0.3.0 still has an orphaned entity and device;
+  v0.3.1 fixed the migration but does not repair a box that already ran it.
+
+Capabilities (new):
+
+- Vision. `UserContent.attachments` exists and is ignored by `_convert_content`,
+  so camera snapshots cannot reach the model.
+- AI Task. `ai_task` is a platform in 2026.9 and fits the subentry layout, giving
+  automations structured data generation rather than only conversation.
+- Prompted tool-calling fallback for models with no native tool support. The
+  `supports_tools` switch currently just disables acting entirely.
+
+Operability:
+
+- Diagnostics with the key redacted. This is a public HACS integration and bug
+  reports currently arrive with nothing attached.
+- Repair issues for an unreachable endpoint or a model that has disappeared from
+  the provider.

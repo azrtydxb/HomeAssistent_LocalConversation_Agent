@@ -9,7 +9,7 @@ from typing import Any, Literal
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -19,7 +19,7 @@ try:  # Home Assistant 2026.1 and later
 except ImportError:  # Home Assistant 2025.9 to 2025.12
     from voluptuous_openapi import convert as to_openapi
 
-from .client import ChatCompletionsClient
+from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
 from .const import (
     CONF_ADVANCED,
     CONF_ASSISTANT_NAME,
@@ -220,6 +220,17 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
             entry_type=dr.DeviceEntryType.SERVICE,
         )
 
+    @callback
+    def _async_set_available(self, available: bool) -> None:
+        """Reflect the endpoint's reachability on the agent.
+
+        Nothing polls a conversation agent, so its state would otherwise claim
+        the agent works right up until someone speaks to it.
+        """
+        if self._attr_available != available:
+            self._attr_available = available
+            self.async_write_ha_state()
+
     @property
     def _settings(self) -> dict[str, Any]:
         """Return this model's settings, advanced ones flattened in."""
@@ -285,10 +296,21 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
                 # stream already routes away from the spoken reply.
                 payload["chat_template_kwargs"] = {"enable_thinking": False}
 
-            async for _content in chat_log.async_add_delta_content_stream(
-                self.entity_id, _transform_stream(client.async_stream_chat(payload))
-            ):
-                pass
+            try:
+                async for _content in chat_log.async_add_delta_content_stream(
+                    self.entity_id, _transform_stream(client.async_stream_chat(payload))
+                ):
+                    pass
+            except InvalidAuth:
+                # The key was accepted at setup and is not any more; only a
+                # person can fix that, so ask for one.
+                self.entry.async_start_reauth(self.hass)
+                self._async_set_available(False)
+                raise
+            except CannotConnect:
+                self._async_set_available(False)
+                raise
+            self._async_set_available(True)
 
             if not chat_log.unresponded_tool_results:
                 break

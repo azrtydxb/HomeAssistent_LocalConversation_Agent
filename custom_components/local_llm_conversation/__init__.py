@@ -10,10 +10,11 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .client import ChatCompletionsClient
+from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
 from .const import (
     CONF_ADVANCED,
     CONF_BASE_URL,
@@ -42,12 +43,23 @@ ADVANCED_KEYS = (
 
 async def async_setup_entry(hass: HomeAssistant, entry: LocalLLMConfigEntry) -> bool:
     """Set up a provider from a config entry."""
-    entry.runtime_data = ChatCompletionsClient(
+    client = ChatCompletionsClient(
         async_get_clientsession(hass),
         entry.data[CONF_BASE_URL],
         entry.data.get(CONF_API_KEY),
         DEFAULT_TIMEOUT,
     )
+
+    # Reach the endpoint once before claiming the agents work. A dead endpoint
+    # is retried by Home Assistant with backoff; a rejected key needs a person.
+    try:
+        await client.async_list_models()
+    except InvalidAuth as err:
+        raise ConfigEntryAuthFailed(str(err)) from err
+    except CannotConnect as err:
+        raise ConfigEntryNotReady(str(err)) from err
+
+    entry.runtime_data = client
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True

@@ -24,6 +24,16 @@
           "base_url": "For example http://192.168.1.10:8000",
           "api_key": "Leave empty if the endpoint needs no authentication."
         }
+      },
+      "reauth_confirm": {
+        "title": "Provider key rejected",
+        "description": "{base_url} rejected the stored API key. Enter a current one.",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "Leave empty if the endpoint no longer needs authentication."
+        }
       }
     },
     "error": {
@@ -32,7 +42,8 @@
     },
     "abort": {
       "already_configured": "That endpoint is already set up. Add a model to it instead.",
-      "reconfigure_successful": "Provider updated."
+      "reconfigure_successful": "Provider updated.",
+      "reauth_successful": "Provider key updated."
     }
   },
   "config_subentries": {

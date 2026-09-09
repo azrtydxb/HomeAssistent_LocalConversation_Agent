@@ -125,6 +125,10 @@ class ChatCompletionsClient:
                 json={**payload, "stream": True},
                 timeout=self._timeout,
             ) as response:
+                if response.status in (401, 403):
+                    raise InvalidAuth(
+                        f"Endpoint rejected the API key ({response.status})"
+                    )
                 if response.status != 200:
                     body = (await response.text())[:_MAX_ERROR_BODY]
                     raise HomeAssistantError(
