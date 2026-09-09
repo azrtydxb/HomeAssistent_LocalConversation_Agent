@@ -112,6 +112,14 @@ async def _transform_stream(
     finish_reason: str | None = None
     produced_content = False
 
+    def spoken(text: str) -> str:
+        """Drop the blank lines models leave between reasoning and the answer."""
+        nonlocal produced_content
+        if not produced_content:
+            text = text.lstrip()
+        produced_content = produced_content or bool(text)
+        return text
+
     yield {"role": "assistant"}
 
     async for choice in stream:
@@ -125,18 +133,20 @@ async def _transform_stream(
                 yield {"thinking_content": reasoning}
 
         if content := delta.get("content"):
-            produced_content = True
             for kind, text in splitter.feed(content):
                 if kind == "thinking":
                     yield {"thinking_content": text}
-                else:
-                    yield {"content": text}
+                elif spoken_text := spoken(text):
+                    yield {"content": spoken_text}
 
         if raw_tool_calls := delta.get("tool_calls"):
             tool_calls.feed(raw_tool_calls)
 
     for kind, text in splitter.flush():
-        yield {"thinking_content": text} if kind == "thinking" else {"content": text}
+        if kind == "thinking":
+            yield {"thinking_content": text}
+        elif spoken_text := spoken(text):
+            yield {"content": spoken_text}
 
     completed = tool_calls.finish()
 

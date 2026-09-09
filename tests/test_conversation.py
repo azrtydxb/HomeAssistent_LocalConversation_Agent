@@ -240,3 +240,38 @@ async def test_tools_are_formatted_with_the_serializer_home_assistant_supplies()
     assert params["type"] == "object"
     assert "name" in params["properties"]
     assert params["required"] == ["name"]
+
+
+async def test_blank_lines_after_reasoning_are_not_spoken() -> None:
+    """Models leave newlines between a think block and the answer."""
+    deltas = await collect(
+        [
+            {"delta": {"content": "<think>a</think>"}},
+            {"delta": {"content": "\n\nThe sky is blue."}},
+        ]
+    )
+    assert text_of(deltas, "content") == "The sky is blue."
+
+
+async def test_interior_newlines_are_preserved() -> None:
+    """Only the leading gap is trimmed; list formatting must survive."""
+    deltas = await collect(
+        [
+            {"delta": {"reasoning": "counting"}},
+            {"delta": {"content": "\n\nTwo lights:\n- one\n- two"}},
+        ]
+    )
+    assert text_of(deltas, "content") == "Two lights:\n- one\n- two"
+
+
+async def test_whitespace_only_response_still_reports_token_exhaustion() -> None:
+    """Trimmed-away whitespace must not count as having answered."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError, match="token limit"):
+        await collect(
+            [
+                {"delta": {"content": "\n\n"}},
+                {"delta": {}, "finish_reason": "length"},
+            ]
+        )
