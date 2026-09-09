@@ -1,17 +1,24 @@
-"""Tests for the config flow."""
+"""Tests for the provider config flow and the model subentry flow."""
 
 import pytest
 from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API
+from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, section
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.local_llm_conversation.const import (
+    CONF_ADVANCED,
+    CONF_ASSISTANT_NAME,
     CONF_BASE_URL,
     CONF_MODEL,
+    CONF_PROMPT,
+    CONF_SUPPORTS_TOOLS,
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_SOUL,
     DOMAIN,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 
 MODELS_URL = "http://host:8000/v1/models"
@@ -24,143 +31,191 @@ async def setup_dependencies(hass: HomeAssistant) -> None:
 
 
 def two_models(mock: AiohttpClientMocker) -> None:
-    mock.get(
-        MODELS_URL,
-        json={"data": [{"id": "qwen3-32b"}, {"id": "llama-3.3-70b"}]},
-    )
+    mock.get(MODELS_URL, json={"data": [{"id": "qwen3-32b"}, {"id": "llama-3.3-70b"}]})
 
 
-async def start(hass: HomeAssistant):
-    return await hass.config_entries.flow.async_init(
+async def add_provider(hass: HomeAssistant, url: str = "http://host:8000"):
+    """Run the provider flow to completion and return the entry."""
+    result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: url, CONF_API_KEY: "sk-x"}
+    )
+    await hass.async_block_till_done()
+    return result
 
 
-async def test_first_step_asks_only_for_the_connection(hass: HomeAssistant) -> None:
-    """The model cannot be chosen before the endpoint has been asked."""
-    result = await start(hass)
-    assert result["type"] is FlowResultType.FORM
+async def open_model_form(hass: HomeAssistant, entry):
+    return await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+
+# --- provider tier ----------------------------------------------------------
+
+
+async def test_provider_asks_only_for_the_connection(hass: HomeAssistant) -> None:
+    """A provider is an endpoint; models are chosen per subentry."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
     assert result["step_id"] == "user"
     assert set(result["data_schema"].schema) == {CONF_BASE_URL, CONF_API_KEY}
 
 
-async def test_models_are_offered_as_choices(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
-    """The whole point: pick from what the endpoint actually serves."""
-    two_models(aioclient_mock)
-    result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_BASE_URL: "http://host:8000", CONF_API_KEY: "sk-x"}
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "model"
-    assert result["description_placeholders"] == {"count": "2"}
-
-    selector = result["data_schema"].schema[CONF_MODEL]
-    values = [option["value"] for option in selector.config["options"]]
-    assert values == ["llama-3.3-70b", "qwen3-32b"]
-    assert selector.config["custom_value"] is True
-
-
-async def test_choosing_a_model_creates_the_entry(
+async def test_provider_is_created_without_a_model(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     two_models(aioclient_mock)
-    result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_BASE_URL: "http://host:8000", CONF_API_KEY: "sk-x"}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_MODEL: "qwen3-32b"}
-    )
+    result = await add_provider(hass)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "qwen3-32b"
-    assert result["data"] == {
-        CONF_BASE_URL: "http://host:8000",
-        CONF_API_KEY: "sk-x",
-        CONF_MODEL: "qwen3-32b",
-    }
-    # Without an API selected the agent can talk but not act.
-    assert result["options"][CONF_LLM_HASS_API] == ["assist"]
+    assert result["title"] == "http://host:8000"
+    assert CONF_MODEL not in result["data"]
 
 
-async def test_endpoint_without_a_model_listing_still_proceeds(
+async def test_the_same_provider_cannot_be_added_twice(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """Not every server exposes /v1/models; the name can be typed instead."""
-    aioclient_mock.get(MODELS_URL, status=404)
-    result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_BASE_URL: "http://host:8000"}
-    )
-
-    assert result["step_id"] == "model"
-    assert result["description_placeholders"] == {"count": "0"}
-    assert result["data_schema"].schema[CONF_MODEL].config["options"] == []
-
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_MODEL: "typed-by-hand"}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_MODEL] == "typed-by-hand"
+    two_models(aioclient_mock)
+    await add_provider(hass)
+    result = await add_provider(hass)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
 
 
-async def test_unreachable_endpoint_reports_on_the_url_field(
+async def test_unreachable_provider_reports_on_the_url_field(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     aioclient_mock.get(MODELS_URL, exc=TimeoutError)
-    result = await start(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_BASE_URL: "http://host:8000"}
     )
-
-    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {CONF_BASE_URL: "cannot_connect"}
 
 
 async def test_rejected_key_reports_on_the_key_field(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """A bad key must not be blamed on the URL."""
     aioclient_mock.get(MODELS_URL, status=401)
-    result = await start(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_BASE_URL: "http://host:8000", CONF_API_KEY: "wrong"}
     )
-
     assert result["errors"] == {CONF_API_KEY: "invalid_auth"}
 
 
-async def test_the_same_model_cannot_be_added_twice(
+# --- model tier -------------------------------------------------------------
+
+
+async def test_everyday_settings_are_visible_and_the_rest_folded_away(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Most people never touch temperature or the persona."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+
+    schema = result["data_schema"].schema
+    visible = [str(key) for key in schema if not isinstance(schema[key], section)]
+    assert visible == [CONF_NAME, CONF_MODEL, CONF_LLM_HASS_API, CONF_ASSISTANT_NAME]
+
+    advanced = schema[CONF_ADVANCED]
+    assert isinstance(advanced, section)
+    assert advanced.options["collapsed"] is True
+    assert CONF_PROMPT in advanced.schema.schema
+    assert CONF_SUPPORTS_TOOLS in advanced.schema.schema
+
+
+async def test_models_come_from_the_provider(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
     two_models(aioclient_mock)
-    for expected in (FlowResultType.CREATE_ENTRY, FlowResultType.ABORT):
-        result = await start(hass)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_BASE_URL: "http://host:8000"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_MODEL: "qwen3-32b"}
-        )
-        assert result["type"] is expected
-    assert result["reason"] == "already_configured"
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+
+    selector = result["data_schema"].schema[CONF_MODEL]
+    assert [option["value"] for option in selector.config["options"]] == [
+        "llama-3.3-70b",
+        "qwen3-32b",
+    ]
+    assert selector.config["custom_value"] is True
 
 
-async def test_a_second_model_on_the_same_endpoint_is_allowed(
+async def test_the_soul_is_prefilled_and_the_name_defaults_to_jarvis(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    """Running a fast and a slow model side by side is a supported setup."""
     two_models(aioclient_mock)
-    for model in ("qwen3-32b", "llama-3.3-70b"):
-        result = await start(hass)
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_BASE_URL: "http://host:8000"}
-        )
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_MODEL: model}
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+
+    schema = result["data_schema"].schema
+    name_key = next(key for key in schema if str(key) == CONF_ASSISTANT_NAME)
+    assert name_key.default() == DEFAULT_ASSISTANT_NAME
+
+    advanced = schema[CONF_ADVANCED].schema.schema
+    prompt_key = next(key for key in advanced if str(key) == CONF_PROMPT)
+    assert prompt_key.description["suggested_value"] == DEFAULT_SOUL
+
+
+async def test_adding_a_model_creates_a_subentry(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Voice",
+            CONF_MODEL: "qwen3-32b",
+            CONF_LLM_HASS_API: ["assist"],
+            CONF_ASSISTANT_NAME: "Jarvis",
+            CONF_ADVANCED: {},
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Voice"
+    subentry = next(iter(entry.subentries.values()))
+    assert subentry.data[CONF_MODEL] == "qwen3-32b"
+    assert subentry.data[CONF_ASSISTANT_NAME] == "Jarvis"
+
+
+async def test_two_models_on_one_provider_each_get_an_agent(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A fast model for voice and a larger one for hard questions."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+
+    for name, model in (("Voice", "qwen3-32b"), ("Study", "llama-3.3-70b")):
+        result = await open_model_form(hass, entry)
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"],
+            {
+                CONF_NAME: name,
+                CONF_MODEL: model,
+                CONF_LLM_HASS_API: ["assist"],
+                CONF_ASSISTANT_NAME: "Jarvis",
+                CONF_ADVANCED: {},
+            },
         )
         assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    assert len(entry.subentries) == 2
+    agents = [
+        state.entity_id
+        for state in hass.states.async_all()
+        if state.entity_id.startswith("conversation.")
+    ]
+    assert len(agents) == 3  # two of ours plus Home Assistant's own

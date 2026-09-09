@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to your LLM endpoint",
-        "description": "Point this at any OpenAI-compatible server, such as vLLM, SGLang, LiteLLM or fastllm proxy. The URL may be the host on its own; /v1 is added if missing.",
+        "title": "Connect to your LLM provider",
+        "description": "Point this at any OpenAI-compatible server, such as vLLM, SGLang, LiteLLM or fastllm proxy. The URL may be the host on its own; /v1 is added if missing.\n\nYou add models to this provider in the next step.",
         "data": {
           "base_url": "Base URL",
           "api_key": "API key"
@@ -12,13 +12,6 @@
           "base_url": "For example http://192.168.1.10:8000",
           "api_key": "Leave empty if the endpoint needs no authentication."
         }
-      },
-      "model": {
-        "title": "Choose a model",
-        "description": "The endpoint offers {count} model(s). Pick one, or type a name if the model you want is not listed.",
-        "data": {
-          "model": "Model"
-        }
       }
     },
     "error": {
@@ -26,29 +19,56 @@
       "invalid_auth": "The endpoint rejected that API key."
     },
     "abort": {
-      "already_configured": "That model on that endpoint is already set up."
+      "already_configured": "That endpoint is already set up. Add a model to it instead."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Agent behaviour",
-        "data": {
-          "model": "Model",
-          "prompt": "Instructions",
-          "llm_hass_api": "Control Home Assistant",
-          "max_tokens": "Maximum tokens to return",
-          "temperature": "Temperature",
-          "top_p": "Top P",
-          "timeout": "Response timeout (seconds)",
-          "supports_tools": "Endpoint supports tool calling"
-        },
-        "data_description": {
-          "prompt": "Replaces the default system prompt. Leave empty to use Home Assistant's.",
-          "llm_hass_api": "Which tool APIs the model may use. Without one it can talk but not act.",
-          "timeout": "How long to wait between streamed tokens before giving up.",
-          "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
+  "config_subentries": {
+    "conversation": {
+      "title": "Model",
+      "initiate_flow": {
+        "user": "Add a model",
+        "reconfigure": "Reconfigure model"
+      },
+      "entry_type": "Conversation agent",
+      "step": {
+        "user": {
+          "title": "Model settings",
+          "data": {
+            "name": "Name",
+            "model": "Model",
+            "llm_hass_api": "Control Home Assistant",
+            "assistant_name": "Assistant name",
+            "advanced": "Advanced"
+          },
+          "data_description": {
+            "name": "Shown in Home Assistant, for example Voice or Study.",
+            "model": "Chosen from what the provider serves. Type a name if it is not listed.",
+            "llm_hass_api": "Which tool APIs the model may use. Without one it can talk but not act.",
+            "assistant_name": "What the agent calls itself. Match your wake word so it stays consistent."
+          },
+          "sections": {
+            "advanced": {
+              "name": "Advanced",
+              "data": {
+                "prompt": "Soul",
+                "max_tokens": "Maximum tokens to return",
+                "temperature": "Temperature",
+                "top_p": "Top P",
+                "timeout": "Response timeout (seconds)",
+                "supports_tools": "Endpoint supports tool calling"
+              },
+              "data_description": {
+                "prompt": "The agent's persona. {name} is replaced with the assistant name above.",
+                "max_tokens": "Reasoning models spend much of this before answering, so do not set it low.",
+                "timeout": "How long to wait between streamed tokens before giving up.",
+                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
+              }
+            }
+          }
         }
+      },
+      "abort": {
+        "entry_not_loaded": "Set up the provider before adding models to it."
       }
     }
   }

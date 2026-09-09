@@ -1,4 +1,8 @@
-"""Config flow for Local LLM Conversation."""
+"""Config flow for Local LLM Conversation.
+
+Two tiers: the config entry is the provider (endpoint and key), and each model on
+it is a subentry with its own conversation agent.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +11,15 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
 )
-from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API
+from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -28,6 +35,8 @@ from homeassistant.helpers.selector import (
 
 from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
 from .const import (
+    CONF_ADVANCED,
+    CONF_ASSISTANT_NAME,
     CONF_BASE_URL,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -36,11 +45,15 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_TIMEOUT,
     CONF_TOP_P,
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
+    DEFAULT_SOUL,
     DEFAULT_TEMPERATURE,
     DEFAULT_TIMEOUT,
     DEFAULT_TOP_P,
     DOMAIN,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 
 STEP_USER_SCHEMA = vol.Schema(
@@ -52,19 +65,14 @@ STEP_USER_SCHEMA = vol.Schema(
 
 
 class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle the config flow."""
+    """Set up a provider."""
 
-    VERSION = 1
-
-    def __init__(self) -> None:
-        """Initialize the flow."""
-        self._connection: dict[str, Any] = {}
-        self._models: list[str] = []
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Collect the endpoint, then ask it which models it serves."""
+        """Collect the endpoint and confirm it answers."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -75,14 +83,17 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
                 DEFAULT_TIMEOUT,
             )
             try:
-                self._models = await client.async_list_models()
+                await client.async_list_models()
             except InvalidAuth:
                 errors[CONF_API_KEY] = "invalid_auth"
             except CannotConnect:
                 errors[CONF_BASE_URL] = "cannot_connect"
             else:
-                self._connection = user_input
-                return await self.async_step_model()
+                await self.async_set_unique_id(user_input[CONF_BASE_URL])
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=user_input[CONF_BASE_URL], data=user_input
+                )
 
         return self.async_show_form(
             step_id="user",
@@ -92,95 +103,71 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_model(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Choose which of the endpoint's models to talk to."""
-        if user_input is not None:
-            model = user_input[CONF_MODEL].strip()
-            await self.async_set_unique_id(
-                f"{self._connection[CONF_BASE_URL]}::{model}"
-            )
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=model,
-                data={**self._connection, CONF_MODEL: model},
-                options={CONF_LLM_HASS_API: [llm.LLM_API_ASSIST]},
-            )
-
-        # custom_value keeps the field usable when the endpoint lists nothing, or
-        # lists a name the proxy does not actually route.
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_MODEL): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(label=model, value=model)
-                            for model in self._models
-                        ],
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                        sort=True,
-                    )
-                )
-            }
-        )
-        if len(self._models) == 1:
-            schema = self.add_suggested_values_to_schema(
-                schema, {CONF_MODEL: self._models[0]}
-            )
-
-        return self.async_show_form(
-            step_id="model",
-            data_schema=schema,
-            description_placeholders={"count": str(len(self._models))},
-        )
-
-    @staticmethod
+    @classmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Return the options flow."""
-        return LocalLLMOptionsFlow()
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Each model on the provider is a conversation subentry."""
+        return {SUBENTRY_TYPE_CONVERSATION: ConversationSubentryFlow}
 
 
-class LocalLLMOptionsFlow(OptionsFlow):
-    """Handle options."""
+class ConversationSubentryFlow(ConfigSubentryFlow):
+    """Add or reconfigure one model on a provider."""
 
-    async def async_step_init(
+    @property
+    def _is_new(self) -> bool:
+        return self.source == "user"
+
+    async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Edit the agent's behaviour."""
+    ) -> SubentryFlowResult:
+        """Configure a model."""
+        entry = self._get_entry()
+        if entry.state is not ConfigEntryState.LOADED:
+            return self.async_abort(reason="entry_not_loaded")
+
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            title = user_input.pop(CONF_NAME, None)
+            if self._is_new:
+                return self.async_create_entry(
+                    title=title or user_input[CONF_MODEL], data=user_input
+                )
+            return self.async_update_and_abort(
+                entry, self._get_reconfigure_subentry(), data=user_input
+            )
 
-        options = self.config_entry.options
-        current_model = options.get(
-            CONF_MODEL, self.config_entry.data.get(CONF_MODEL, "")
-        )
+        current = {} if self._is_new else dict(self._get_reconfigure_subentry().data)
 
-        # Offer the endpoint's current catalogue, but never block on it: the
-        # options form must open even when the endpoint is down.
-        client = ChatCompletionsClient(
-            async_get_clientsession(self.hass),
-            self.config_entry.data[CONF_BASE_URL],
-            self.config_entry.data.get(CONF_API_KEY),
-            DEFAULT_TIMEOUT,
-        )
         try:
-            models = await client.async_list_models()
+            models = await entry.runtime_data.async_list_models()
         except (CannotConnect, InvalidAuth):
             models = []
-        if current_model and current_model not in models:
-            models = [*models, current_model]
+        if (chosen := current.get(CONF_MODEL)) and chosen not in models:
+            models = [*models, chosen]
 
-        apis = [
-            SelectOptionDict(label=api.name, value=api.id)
-            for api in llm.async_get_apis(self.hass)
-        ]
+        return self.async_show_form(
+            step_id="user",
+            data_schema=self._schema(models, current),
+        )
 
-        schema = vol.Schema(
+    async_step_reconfigure = async_step_user
+
+    def _schema(self, models: list[str], current: dict[str, Any]) -> vol.Schema:
+        """Build the form: everyday settings first, the rest folded away."""
+        advanced = dict(current.get(CONF_ADVANCED, {}))
+        schema: dict[Any, Any] = {}
+
+        if self._is_new:
+            # pylint: disable-next=home-assistant-config-flow-name-field
+            schema[vol.Required(CONF_NAME, default=DEFAULT_CONVERSATION_NAME)] = str
+
+        schema.update(
             {
-                vol.Required(CONF_MODEL, default=current_model): SelectSelector(
+                vol.Required(
+                    CONF_MODEL,
+                    description={"suggested_value": current.get(CONF_MODEL)},
+                ): SelectSelector(
                     SelectSelectorConfig(
                         options=[
                             SelectOptionDict(label=model, value=model)
@@ -192,35 +179,76 @@ class LocalLLMOptionsFlow(OptionsFlow):
                     )
                 ),
                 vol.Optional(
-                    CONF_PROMPT, default=options.get(CONF_PROMPT, "")
-                ): TemplateSelector(),
-                vol.Optional(
                     CONF_LLM_HASS_API,
-                    default=options.get(CONF_LLM_HASS_API, [llm.LLM_API_ASSIST]),
-                ): SelectSelector(SelectSelectorConfig(options=apis, multiple=True)),
-                vol.Optional(
-                    CONF_MAX_TOKENS,
-                    default=options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-                ): NumberSelector(
-                    NumberSelectorConfig(min=1, max=65536, mode=NumberSelectorMode.BOX)
+                    description={
+                        "suggested_value": current.get(
+                            CONF_LLM_HASS_API, [llm.LLM_API_ASSIST]
+                        )
+                    },
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(label=api.name, value=api.id)
+                            for api in llm.async_get_apis(self.hass)
+                        ],
+                        multiple=True,
+                    )
                 ),
-                vol.Optional(
-                    CONF_TEMPERATURE,
-                    default=options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
-                ): NumberSelector(NumberSelectorConfig(min=0, max=2, step=0.05)),
-                vol.Optional(
-                    CONF_TOP_P, default=options.get(CONF_TOP_P, DEFAULT_TOP_P)
-                ): NumberSelector(NumberSelectorConfig(min=0, max=1, step=0.05)),
-                vol.Optional(
-                    CONF_TIMEOUT, default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
-                ): NumberSelector(
-                    NumberSelectorConfig(min=5, max=900, mode=NumberSelectorMode.BOX)
+                vol.Required(
+                    CONF_ASSISTANT_NAME,
+                    default=current.get(CONF_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME),
+                ): str,
+                vol.Required(CONF_ADVANCED): section(
+                    vol.Schema(
+                        {
+                            vol.Optional(
+                                CONF_PROMPT,
+                                description={
+                                    "suggested_value": advanced.get(
+                                        CONF_PROMPT, DEFAULT_SOUL
+                                    )
+                                },
+                            ): TemplateSelector(),
+                            vol.Optional(
+                                CONF_MAX_TOKENS,
+                                default=advanced.get(
+                                    CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS
+                                ),
+                            ): NumberSelector(
+                                NumberSelectorConfig(
+                                    min=1, max=65536, mode=NumberSelectorMode.BOX
+                                )
+                            ),
+                            vol.Optional(
+                                CONF_TEMPERATURE,
+                                default=advanced.get(
+                                    CONF_TEMPERATURE, DEFAULT_TEMPERATURE
+                                ),
+                            ): NumberSelector(
+                                NumberSelectorConfig(min=0, max=2, step=0.05)
+                            ),
+                            vol.Optional(
+                                CONF_TOP_P,
+                                default=advanced.get(CONF_TOP_P, DEFAULT_TOP_P),
+                            ): NumberSelector(
+                                NumberSelectorConfig(min=0, max=1, step=0.05)
+                            ),
+                            vol.Optional(
+                                CONF_TIMEOUT,
+                                default=advanced.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
+                            ): NumberSelector(
+                                NumberSelectorConfig(
+                                    min=5, max=900, mode=NumberSelectorMode.BOX
+                                )
+                            ),
+                            vol.Optional(
+                                CONF_SUPPORTS_TOOLS,
+                                default=advanced.get(CONF_SUPPORTS_TOOLS, True),
+                            ): bool,
+                        }
+                    ),
+                    {"collapsed": True},
                 ),
-                vol.Optional(
-                    CONF_SUPPORTS_TOOLS,
-                    default=options.get(CONF_SUPPORTS_TOOLS, True),
-                ): bool,
             }
         )
-
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return vol.Schema(schema)

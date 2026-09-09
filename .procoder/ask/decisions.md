@@ -89,3 +89,29 @@ account-level problem on the org, not a permissions or protocol issue.
 
 - Publish under `piwi3910` instead (authenticated account, working).
 - Fix the azrtydxb account, then retry the push there.
+
+## Two-tier configuration (provider -> models)
+
+**Decided: use Home Assistant config subentries.** The config entry becomes the
+provider (base URL, API key); each model is a `conversation` subentry with its own
+agent entity. This is the native mechanism and is what Ollama uses in 2026.x.
+Requires a config entry migration so the existing single-tier entry is not lost.
+
+## Basic vs advanced settings
+
+**Decided: `data_entry_flow.section` with `collapsed: True`.** Native collapsible
+section; no custom UI needed.
+
+## Assistant name / wake word consistency
+
+`wake_word_phrase` never reaches the conversation agent: `assist_pipeline` sets it
+only for duplicate-wakeup detection and does not put it on `ConversationInput`,
+which carries just text, context, conversation_id, device_id, satellite_id,
+language, agent_id and extra_system_prompt. So the agent cannot know at runtime
+which wake word triggered it. `WakeWord` does expose id, name and phrase, so a
+name can be resolved when the form is rendered.
+
+- Configurable "Assistant name", defaulted from the preferred pipeline's wake word
+  when one can be resolved, injected into the system prompt.
+- Configurable only, no wake-word derivation.
+- Resolve per request from satellite_id/device_id at runtime.

@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
 from homeassistant.components import conversation
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -21,19 +21,24 @@ except ImportError:  # Home Assistant 2025.9 to 2025.12
 
 from .client import ChatCompletionsClient
 from .const import (
+    CONF_ADVANCED,
+    CONF_ASSISTANT_NAME,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
     CONF_SUPPORTS_TOOLS,
     CONF_TEMPERATURE,
     CONF_TOP_P,
+    DEFAULT_ASSISTANT_NAME,
     DEFAULT_MAX_TOKENS,
+    DEFAULT_SOUL,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DOMAIN,
     LOGGER,
     MAX_TOOL_ITERATIONS,
     REASONING_KEYS,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 from .streaming import ThinkSplitter, ToolCallAccumulator
 
@@ -43,8 +48,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the conversation entity for a config entry."""
-    async_add_entities([LocalLLMConversationEntity(entry)])
+    """Set up one conversation entity per model configured on this provider."""
+    for subentry_id, subentry in entry.subentries.items():
+        if subentry.subentry_type != SUBENTRY_TYPE_CONVERSATION:
+            continue
+        async_add_entities(
+            [LocalLLMConversationEntity(entry, subentry)],
+            config_subentry_id=subentry_id,
+        )
 
 
 def _format_tool(
@@ -194,17 +205,32 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
     _attr_name = None
     _attr_supports_streaming = True
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the agent."""
         self.entry = entry
-        self._attr_unique_id = entry.entry_id
+        self.subentry = subentry
+        self._attr_unique_id = subentry.subentry_id
         self._attr_device_info = dr.DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
+            identifiers={(DOMAIN, subentry.subentry_id)},
+            name=subentry.title,
             manufacturer="Local LLM Conversation",
-            model=entry.options.get(CONF_MODEL) or entry.data.get(CONF_MODEL),
+            model=subentry.data.get(CONF_MODEL),
             entry_type=dr.DeviceEntryType.SERVICE,
         )
+
+    @property
+    def _settings(self) -> dict[str, Any]:
+        """Return this model's settings, advanced ones flattened in."""
+        data = dict(self.subentry.data)
+        return {**data.pop(CONF_ADVANCED, {}), **data}
+
+    @property
+    def _soul(self) -> str:
+        """Return the persona prompt with the assistant's name filled in."""
+        settings = self._settings
+        soul = settings.get(CONF_PROMPT) or DEFAULT_SOUL
+        name = settings.get(CONF_ASSISTANT_NAME) or DEFAULT_ASSISTANT_NAME
+        return soul.replace("{name}", name)
 
     @property
     def supported_languages(self) -> list[str] | Literal["*"]:
@@ -217,13 +243,13 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
         chat_log: conversation.ChatLog,
     ) -> conversation.ConversationResult:
         """Handle a turn of conversation."""
-        options = self.entry.options
+        options = self._settings
 
         try:
             await chat_log.async_provide_llm_data(
                 user_input.as_llm_context(DOMAIN),
                 options.get(CONF_LLM_HASS_API),
-                options.get(CONF_PROMPT),
+                self._soul,
                 user_input.extra_system_prompt,
             )
         except conversation.ConverseError as err:
@@ -239,7 +265,7 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
             payload: dict[str, Any] = {
-                "model": options.get(CONF_MODEL) or self.entry.data[CONF_MODEL],
+                "model": options[CONF_MODEL],
                 "messages": [
                     message
                     for content in chat_log.content
