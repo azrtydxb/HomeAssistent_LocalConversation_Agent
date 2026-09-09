@@ -28,11 +28,13 @@ from .const import (
     CONF_PROMPT,
     CONF_SUPPORTS_TOOLS,
     CONF_TEMPERATURE,
+    CONF_THINKING,
     CONF_TOP_P,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_MAX_TOKENS,
     DEFAULT_SOUL,
     DEFAULT_TEMPERATURE,
+    DEFAULT_THINKING,
     DEFAULT_TOP_P,
     DOMAIN,
     LOGGER,
@@ -277,6 +279,11 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
             }
             if tools:
                 payload["tools"] = tools
+            if not options.get(CONF_THINKING, DEFAULT_THINKING):
+                # How vLLM and SGLang switch off a reasoning model's think block.
+                # Endpoints that ignore the hint simply keep reasoning, which the
+                # stream already routes away from the spoken reply.
+                payload["chat_template_kwargs"] = {"enable_thinking": False}
 
             async for _content in chat_log.async_add_delta_content_stream(
                 self.entity_id, _transform_stream(client.async_stream_chat(payload))

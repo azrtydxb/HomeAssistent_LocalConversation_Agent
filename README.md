@@ -53,13 +53,19 @@ _Settings → Voice assistants_.
 | Model                                | Defaults to the endpoint's only model.                                                                                     |
 | Instructions                         | Replaces Home Assistant's default system prompt.                                                                           |
 | Control Home Assistant               | Which tool APIs the model may use. Without one it can talk but not act.                                                    |
+| Let the model think first            | Off by default. See below.                                                                                                 |
 | Maximum tokens / Temperature / Top P | Passed through to the endpoint. Reasoning models spend a large part of this budget before answering, so do not set it low. |
 
-The context window is fixed when the server starts and cannot be set from Home
-Assistant — the OpenAI chat API has no such parameter. Where the endpoint
-announces it (`max_model_len` on vLLM and SGLang, `context_length` on OpenRouter
-and LiteLLM) the model form shows it and caps the reply length accordingly.
-Endpoints that announce nothing fall back to a 65536 ceiling.
+### Thinking
+
+Reasoning models produce a think block before answering. It is switched off by
+default, because it costs seconds on every turn and a large share of the token
+budget — a one-line question was measured spending its entire budget reasoning and
+returning no answer at all. Home Assistant is asked mostly to turn lights on.
+
+Switching it off sends `chat_template_kwargs: {"enable_thinking": false}`, which
+is how vLLM and SGLang disable it. Endpoints that ignore the hint simply keep
+reasoning, and the reasoning is still kept out of the spoken reply.
 | Response timeout | Time to wait between streamed tokens before giving up. |
 | Endpoint supports tool calling | Turn off only for models that cannot call tools. |
 

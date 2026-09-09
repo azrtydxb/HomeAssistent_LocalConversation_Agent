@@ -26,6 +26,11 @@ CONF_TIMEOUT = "timeout"
 # support tool calling, so it defaults on and exists only as an escape hatch.
 CONF_SUPPORTS_TOOLS = "supports_tools"
 
+# Reasoning is off unless asked for: it costs seconds and a large slice of the
+# token budget on every turn, which a voice assistant rarely earns back.
+CONF_THINKING = "thinking"
+DEFAULT_THINKING = False
+
 DEFAULT_CONVERSATION_NAME = "Local LLM"
 DEFAULT_ASSISTANT_NAME = "Jarvis"
 # Reasoning models spend a large share of the budget before answering: a one-line

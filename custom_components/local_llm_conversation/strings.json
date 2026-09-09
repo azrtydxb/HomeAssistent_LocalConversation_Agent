@@ -68,17 +68,18 @@
                 "temperature": "Temperature",
                 "top_p": "Top P",
                 "timeout": "Response timeout (seconds)",
-                "supports_tools": "Endpoint supports tool calling"
+                "supports_tools": "Endpoint supports tool calling",
+                "thinking": "Let the model think first"
               },
               "data_description": {
                 "prompt": "The agent's persona. {name} is replaced with the assistant name above.",
-                "max_tokens": "How long a reply may be. Capped by the model's context window. Reasoning models spend much of this before answering, so do not set it low.",
+                "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
                 "timeout": "How long to wait between streamed tokens before giving up.",
-                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
+                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything.",
+                "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it."
               }
             }
-          },
-          "description": "Context window of the selected model: {context}.\n\nThe window is fixed by the server and cannot be changed from here; it caps how long a reply may be."
+          }
         }
       },
       "abort": {

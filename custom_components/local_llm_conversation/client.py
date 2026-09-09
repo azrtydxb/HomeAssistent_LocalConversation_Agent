@@ -10,27 +10,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import LOGGER
-
-
-# Servers disagree on how they announce a model's context window: vLLM and SGLang
-# use max_model_len, OpenRouter and LiteLLM use context_length. Many announce
-# nothing at all, in which case it stays unknown.
-_CONTEXT_KEYS = ("max_model_len", "context_length", "max_context_length")
-
-
-@dataclass(frozen=True)
-class ModelInfo:
-    """A model the endpoint serves."""
-
-    id: str
-    context_length: int | None = None
 
 
 class CannotConnect(HomeAssistantError):
@@ -85,8 +70,8 @@ class ChatCompletionsClient:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    async def async_list_models(self) -> list[ModelInfo]:
-        """Return the models the endpoint advertises.
+    async def async_list_models(self) -> list[str]:
+        """Return the model ids the endpoint advertises.
 
         Raises CannotConnect if the endpoint is unreachable and InvalidAuth if it
         rejects the key. An empty list means the endpoint answered but does not
@@ -121,12 +106,9 @@ class ChatCompletionsClient:
         if not isinstance(payload, dict):
             return []
         return sorted(
-            (
-                ModelInfo(id=model["id"], context_length=_context_length(model))
-                for model in payload.get("data", [])
-                if isinstance(model, dict) and model.get("id")
-            ),
-            key=lambda model: model.id,
+            model["id"]
+            for model in payload.get("data", [])
+            if isinstance(model, dict) and model.get("id")
         )
 
     async def async_stream_chat(
@@ -161,15 +143,6 @@ class ChatCompletionsClient:
             raise HomeAssistantError(
                 f"Could not reach the LLM endpoint: {err}"
             ) from err
-
-
-def _context_length(model: dict[str, Any]) -> int | None:
-    """Return the model's announced context window, if it announces one."""
-    for key in _CONTEXT_KEYS:
-        value = model.get(key)
-        if isinstance(value, int) and value > 0:
-            return value
-    return None
 
 
 def _parse_sse_line(raw: bytes) -> dict[str, Any] | None:
