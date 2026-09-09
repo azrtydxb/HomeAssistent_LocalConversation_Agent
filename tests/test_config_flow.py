@@ -46,6 +46,16 @@ async def add_provider(hass: HomeAssistant, url: str = "http://host:8000"):
     return result
 
 
+async def start_reconfigure(hass: HomeAssistant, entry):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+
+
 async def open_model_form(hass: HomeAssistant, entry):
     return await hass.config_entries.subentries.async_init(
         (entry.entry_id, SUBENTRY_TYPE_CONVERSATION),
@@ -219,3 +229,62 @@ async def test_two_models_on_one_provider_each_get_an_agent(
         if state.entity_id.startswith("conversation.")
     ]
     assert len(agents) == 3  # two of ours plus Home Assistant's own
+
+
+async def test_the_provider_url_and_key_can_be_changed(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Without this there is no way to fix a moved endpoint or a rotated key."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    aioclient_mock.get("http://newhost:9000/v1/models", json={"data": []})
+
+    result = await start_reconfigure(hass, entry)
+    assert result["step_id"] == "reconfigure"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_BASE_URL: "http://newhost:9000", CONF_API_KEY: "sk-new"},
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_BASE_URL] == "http://newhost:9000"
+    assert entry.data[CONF_API_KEY] == "sk-new"
+    assert entry.title == "http://newhost:9000"
+
+
+async def test_reconfigure_reports_a_bad_endpoint_instead_of_saving_it(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    aioclient_mock.get("http://dead:9000/v1/models", exc=TimeoutError)
+
+    result = await start_reconfigure(hass, entry)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: "http://dead:9000"}
+    )
+
+    assert result["errors"] == {CONF_BASE_URL: "cannot_connect"}
+    assert entry.data[CONF_BASE_URL] == "http://host:8000"
+
+
+async def test_reconfigure_refuses_to_collide_with_another_provider(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Two providers on one URL would fight over the same models."""
+    two_models(aioclient_mock)
+    aioclient_mock.get("http://other:8000/v1/models", json={"data": []})
+    first = (await add_provider(hass))["result"]
+    await add_provider(hass, "http://other:8000")
+
+    result = await start_reconfigure(hass, first)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: "http://other:8000"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert first.data[CONF_BASE_URL] == "http://host:8000"

@@ -103,6 +103,50 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Change the endpoint or the key of an existing provider."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            client = ChatCompletionsClient(
+                async_get_clientsession(self.hass),
+                user_input[CONF_BASE_URL],
+                user_input.get(CONF_API_KEY),
+                DEFAULT_TIMEOUT,
+            )
+            try:
+                await client.async_list_models()
+            except InvalidAuth:
+                errors[CONF_API_KEY] = "invalid_auth"
+            except CannotConnect:
+                errors[CONF_BASE_URL] = "cannot_connect"
+            else:
+                # Moving a provider to a new URL legitimately changes its unique
+                # id; only a collision with a different provider is a problem.
+                if any(
+                    other.entry_id != entry.entry_id
+                    and other.data.get(CONF_BASE_URL) == user_input[CONF_BASE_URL]
+                    for other in self._async_current_entries()
+                ):
+                    return self.async_abort(reason="already_configured")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=user_input[CONF_BASE_URL],
+                    data_updates=user_input,
+                    title=user_input[CONF_BASE_URL],
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA, user_input or entry.data
+            ),
+            errors=errors,
+        )
+
     @classmethod
     @callback
     def async_get_supported_subentry_types(

@@ -12,6 +12,18 @@
           "base_url": "For example http://192.168.1.10:8000",
           "api_key": "Leave empty if the endpoint needs no authentication."
         }
+      },
+      "reconfigure": {
+        "title": "Provider settings",
+        "description": "Change the endpoint or the API key. Models configured on this provider are kept.",
+        "data": {
+          "base_url": "Base URL",
+          "api_key": "API key"
+        },
+        "data_description": {
+          "base_url": "For example http://192.168.1.10:8000",
+          "api_key": "Leave empty if the endpoint needs no authentication."
+        }
       }
     },
     "error": {
@@ -19,7 +31,8 @@
       "invalid_auth": "The endpoint rejected that API key."
     },
     "abort": {
-      "already_configured": "That endpoint is already set up. Add a model to it instead."
+      "already_configured": "That endpoint is already set up. Add a model to it instead.",
+      "reconfigure_successful": "Provider updated."
     }
   },
   "config_subentries": {

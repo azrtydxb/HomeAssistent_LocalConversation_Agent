@@ -215,3 +215,45 @@ async def test_migration_keeps_the_existing_entity_id(hass: HomeAssistant) -> No
     migrated = entities.async_get("conversation.qwen3")
     assert migrated.unique_id == subentry.subentry_id
     assert migrated.config_subentry_id == subentry.subentry_id
+
+
+async def test_a_leftover_device_can_be_deleted_but_a_live_one_cannot(
+    hass: HomeAssistant,
+) -> None:
+    """A device from a previous layout has no other route out of the UI."""
+    from homeassistant.helpers import device_registry as dr
+
+    from custom_components.local_llm_conversation import (
+        async_remove_config_entry_device,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={CONF_BASE_URL: "http://localhost:8000"},
+        subentries_data=[
+            {
+                "subentry_type": SUBENTRY_TYPE_CONVERSATION,
+                "title": "Voice",
+                "unique_id": None,
+                "data": {CONF_MODEL: "qwen3"},
+            }
+        ],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    subentry_id = next(iter(entry.subentries))
+    devices = dr.async_get(hass)
+
+    live = devices.async_get_device_by_identifier((DOMAIN, subentry_id), entry.entry_id)
+    assert live is not None
+    assert not await async_remove_config_entry_device(hass, entry, live)
+
+    stale = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "an-old-subentry-id")},
+        name="leftover",
+    )
+    assert await async_remove_config_entry_device(hass, entry, stale)

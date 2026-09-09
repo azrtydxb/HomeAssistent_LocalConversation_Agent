@@ -63,6 +63,24 @@ async def async_reload_entry(hass: HomeAssistant, entry: LocalLLMConfigEntry) ->
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Allow deleting a device that no longer belongs to a model.
+
+    Devices are keyed by subentry. One that matches no current subentry is left
+    over - from an upgrade, or from a model removed while the entry was not
+    loaded - and there is otherwise no way to clear it from the UI. A device that
+    does belong to a model stays: remove the model instead.
+    """
+    live = {
+        (DOMAIN, subentry_id)
+        for subentry_id, subentry in entry.subentries.items()
+        if subentry.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    }
+    return not (device.identifiers & live)
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate a flat entry to the provider/model layout.
 
@@ -125,7 +143,9 @@ def _async_adopt_existing_entity(
         )
 
     devices = dr.async_get(hass)
-    if device := devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)}):
+    if device := devices.async_get_device_by_identifier(
+        (DOMAIN, entry.entry_id), entry.entry_id
+    ):
         devices.async_update_device(
             device.id,
             new_identifiers={(DOMAIN, subentry.subentry_id)},
