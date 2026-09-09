@@ -38,6 +38,9 @@ CONF_SUPPORTS_TOOLS = "supports_tools"
 # Reasoning is off unless asked for: it costs seconds and a large slice of the
 # token budget on every turn, which a voice assistant rarely earns back.
 # Set from probing the model when it is chosen, then overridable by hand.
+# Empty means answer in whatever language the request came in.
+CONF_LANGUAGE = "language"
+
 CONF_VISION = "vision"
 
 CONF_THINKING = "thinking"

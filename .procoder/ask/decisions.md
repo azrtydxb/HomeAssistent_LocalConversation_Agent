@@ -145,3 +145,83 @@ Operability:
   reports currently arrive with nothing attached.
 - Repair issues for an unreachable endpoint or a model that has disappeared from
   the provider.
+
+## Analysis of extended_openai_conversation (2026-09-09)
+
+Repo state: 1436 stars, 127 open issues, actively maintained (v3.0.0, pushed
+2026-09-06). It has modernised too - it now has `ai_task.py` and `entity.py` - so
+this is not a comparison against an abandoned project.
+
+Its top open issue by reactions is #220 "Migrate to native LLM API support in
+Home Assistant" (30 reactions, far ahead of anything else). That is the design we
+already have.
+
+Deliberately not adopting - its function DSL:
+`sqlite`, `scrape`, `bash`, `file`, `web`, `composite`, and the `execute_service`
+native function. `bash` and `file` in particular give a model shell and filesystem
+access on the Home Assistant host. `execute_service` lets the model call any
+service regardless of what is exposed. Home Assistant's own LLM API covers the
+legitimate uses.
+
+Already covered: native LLM API (#220), streaming (#58), AI Task, vision,
+attaching the user's name (Home Assistant does this itself in
+`async_provide_llm_data`).
+
+Real gaps found:
+
+1. Both `temperature` and `top_p` are always sent (their #428). Anthropic rejects
+   a request carrying both. Latent here rather than breaking, since the proxy in
+   use fronts other providers.
+2. No history, energy or statistics access. Their `get_history`, `get_energy` and
+   `get_statistics` native functions have no equivalent in Home Assistant's Assist
+   API, which is intent-based plus GetLiveContext. Their #157 shows the trap:
+   an unbounded history query overflows the context window.
+3. No memory across conversations (their #241).
+4. No automation creation (their `add_automation`).
+5. No way to see the prompt that was actually sent (their #283).
+6. English only; they ship 10+ translations.
+7. Skills - reusable capability modules loaded from disk. Overlaps what the soul
+   already does for persona.
+
+## Working through the filed issues
+
+No decision needed, starting on these:
+
+- #1 sampling parameters: send only what differs from the default.
+- #5 prompt inspection: a debug log line behind the existing logger is the
+  smallest thing that works and keeps house data out of files people paste.
+- #6 translations: mechanical, but quality cannot be verified for languages I
+  cannot read, so machine output would be shipped unchecked.
+
+Decisions needed:
+
+### #8 language override: form shape
+
+Home Assistant config flow forms have no conditional visibility, so a checkbox
+plus a dropdown puts both on screen with the dropdown inert while unchecked.
+
+- Checkbox plus dropdown, as asked, accepting the inert field.
+- One language selector where "Automatic" means match the input.
+
+### #2 history, energy and statistics: scope
+
+- All three, bounded: GetHistory, GetStatistics, GetEnergy.
+- History only, as the common case.
+- Statistics only, since long-run questions are what people ask.
+
+### #3 memory: approach
+
+- Model-controlled via a Remember tool, stored in .storage, pruned by count.
+- Person-controlled: a text field in options the household edits by hand.
+- Not built; close the issue.
+
+### #4 automations: safety model
+
+- Propose only: draft it, a person confirms before it exists.
+- Create disabled, never edit or delete existing ones.
+- Not built; close the issue.
+
+### #7 skills
+
+Recommend deferring: the soul covers the persona half, and every enabled skill is
+paid on every utterance in prompt size.

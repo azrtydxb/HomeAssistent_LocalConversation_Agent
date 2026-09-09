@@ -90,7 +90,8 @@
                 "temperature": "Temperature",
                 "top_p": "Top P",
                 "timeout": "Response timeout (seconds)",
-                "tool_mode": "How the model calls tools"
+                "tool_mode": "How the model calls tools",
+                "language": "Always answer in"
               },
               "data_description": {
                 "prompt": "The agent's persona. {name} is replaced with the assistant name above.",
@@ -98,7 +99,9 @@
                 "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it.",
                 "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
                 "timeout": "How long to wait between streamed tokens before giving up.",
-                "tool_mode": "Native uses the endpoint's tool calling and is right for vLLM, SGLang and LiteLLM. Prompted describes the tools in the prompt and reads the reply for a call, for small models whose stack offers none - it is less reliable and the reply cannot start being spoken until it is complete. None lets the agent talk without acting."
+                "tool_mode": "Native uses the endpoint's tool calling and is right for vLLM, SGLang and LiteLLM. Prompted describes the tools in the prompt and reads the reply for a call, for small models whose stack offers none - it is less reliable and the reply cannot start being spoken until it is complete. None lets the agent talk without acting.",
+                "language": "Leave empty to answer in whatever language you are addressed in. Set a language and the agent always replies in it. Note that your voice assistant's text-to-speech voice has its own language: if they disagree you get correct text read in the wrong accent.",
+                "temperature": "Left at the default it is not sent at all and the server's own default applies. Some providers refuse a request that sets both temperature and top P."
               }
             }
           }
@@ -144,13 +147,16 @@
                 "max_tokens": "Maximum tokens to return",
                 "temperature": "Temperature",
                 "top_p": "Top P",
-                "timeout": "Response timeout (seconds)"
+                "timeout": "Response timeout (seconds)",
+                "language": "Always answer in"
               },
               "data_description": {
                 "vision": "Set from testing the model. Servers accept images for text-only models and quietly ignore them, so this is measured by whether an image costs prompt tokens. Turn it off if you would rather not send camera snapshots.",
                 "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it.",
                 "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
-                "timeout": "How long to wait between streamed tokens before giving up."
+                "timeout": "How long to wait between streamed tokens before giving up.",
+                "language": "Leave empty to answer in whatever language you are addressed in. Set a language and the agent always replies in it. Note that your voice assistant's text-to-speech voice has its own language: if they disagree you get correct text read in the wrong accent.",
+                "temperature": "Left at the default it is not sent at all and the server's own default applies. Some providers refuse a request that sets both temperature and top P."
               }
             }
           }

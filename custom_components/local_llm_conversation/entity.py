@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
 from .const import (
     CONF_ADVANCED,
     CONF_ASSISTANT_NAME,
+    CONF_LANGUAGE,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
@@ -327,11 +329,20 @@ class LocalLLMBaseEntity(Entity):
 
     @property
     def _soul(self) -> str:
-        """Return the persona prompt with the assistant's name filled in."""
+        """Return the persona prompt, with the name and any language filled in."""
         settings = self._settings
         soul = settings.get(CONF_PROMPT) or DEFAULT_SOUL
         name = settings.get(CONF_ASSISTANT_NAME) or DEFAULT_ASSISTANT_NAME
-        return soul.replace("{name}", name)
+        soul = soul.replace("{name}", name)
+        if language := settings.get(CONF_LANGUAGE):
+            # Appended to the soul rather than sent per request, so the prompt
+            # prefix stays identical between turns and keeps its cache.
+            soul += (
+                "\n\nAlways respond in the language identified by the IETF "
+                f"language tag '{language}', whatever language you are "
+                "addressed in."
+            )
+        return soul
 
     async def _async_handle_chat_log(
         self,
@@ -368,8 +379,7 @@ class LocalLLMBaseEntity(Entity):
                     for message in _convert_content(content, images)
                 ],
                 "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-                "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
-                "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
+                **_sampling(options),
             }
             if tools and not prompted:
                 payload["tools"] = tools
@@ -388,6 +398,15 @@ class LocalLLMBaseEntity(Entity):
                 payload["chat_template_kwargs"] = {"enable_thinking": False}
             if structure is not None:
                 payload["response_format"] = _response_format(structure)
+
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                # Only on request: this carries the exposed entity list and
+                # whatever the household wrote into the soul.
+                LOGGER.debug(
+                    "Request to %s:\n%s",
+                    options[CONF_MODEL],
+                    json.dumps(payload, indent=2, default=str),
+                )
 
             try:
                 async for _content in chat_log.async_add_delta_content_stream(
@@ -435,3 +454,22 @@ def _tool_mode(options: dict[str, Any]) -> str:
     if options.get(CONF_SUPPORTS_TOOLS, True) is False:
         return TOOL_MODE_NONE
     return DEFAULT_TOOL_MODE
+
+
+def _sampling(options: dict[str, Any]) -> dict[str, Any]:
+    """Return the sampling parameters that were actually changed.
+
+    Sending every parameter regardless is what most integrations do, and it makes
+    a provider that refuses a combination fail on every turn with nothing to
+    point at: Anthropic rejects a request carrying both temperature and top_p.
+    A setting left alone is therefore left out, and the server's own default
+    applies.
+    """
+    sampling = {}
+    for key, default in (
+        (CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+        (CONF_TOP_P, DEFAULT_TOP_P),
+    ):
+        if (value := options.get(key, default)) != default:
+            sampling[key] = value
+    return sampling

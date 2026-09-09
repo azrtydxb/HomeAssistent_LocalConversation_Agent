@@ -24,6 +24,8 @@ from homeassistant.data_entry_flow import section
 from homeassistant.helpers import llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    LanguageSelector,
+    LanguageSelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -41,6 +43,7 @@ from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
 from .const import (
     CONF_ADVANCED,
     CONF_ASSISTANT_NAME,
+    CONF_LANGUAGE,
     CONF_BASE_URL,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -361,6 +364,10 @@ class ModelSubentryFlow(ConfigSubentryFlow):
             ] = TemplateSelector()
         inner.update(
             {
+                vol.Optional(
+                    CONF_LANGUAGE,
+                    description={"suggested_value": advanced.get(CONF_LANGUAGE)},
+                ): LanguageSelector(LanguageSelectorConfig(native_name=True)),
                 vol.Optional(CONF_VISION, default=vision_default): bool,
                 vol.Optional(
                     CONF_THINKING,

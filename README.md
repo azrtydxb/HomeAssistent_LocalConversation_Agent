@@ -56,6 +56,25 @@ _Settings → Voice assistants_.
 | Let the model think first            | Off by default. See below.                                                                                                 |
 | Maximum tokens / Temperature / Top P | Passed through to the endpoint. Reasoning models spend a large part of this budget before answering, so do not set it low. |
 
+### Language
+
+By default the agent answers in whatever language it was addressed in. Set
+**Always answer in** and it replies in that language whatever you use.
+
+The instruction carries only the IETF language tag; no table of language names is
+maintained. Verified against a local Qwen3: asked in English with the tag `nl`, it
+answers in Dutch.
+
+Your voice assistant's text-to-speech voice has its own language setting, which
+this cannot reach. If the two disagree you get correct text read in the wrong
+accent.
+
+### Sampling
+
+Temperature and Top P are sent only if you change them. Left alone, they are
+omitted and the endpoint's own defaults apply — some providers reject a request
+that sets both, and Anthropic is one of them.
+
 ### Thinking
 
 Reasoning models produce a think block before answering. It is switched off by
@@ -133,6 +152,11 @@ Assistant retries with backoff rather than failing outright; if it rejects the
 key, you are asked for a new one instead of being retried forever. An agent whose
 endpoint has gone away reports itself unavailable rather than waiting for someone
 to speak to it.
+
+Turning on debug logging for `custom_components.local_llm_conversation` writes the
+full request — the assembled prompt, the exposed entity list and the tool
+definitions — to the log, which is the only way to see what the model was actually
+asked. It contains everything in your house, so it is off unless you ask for it.
 
 Diagnostics can be downloaded from the provider's menu for bug reports. The API
 key is redacted, and the soul is reported by length rather than content, since a

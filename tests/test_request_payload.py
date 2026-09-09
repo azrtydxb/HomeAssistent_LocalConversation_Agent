@@ -314,3 +314,75 @@ async def test_no_tools_mode_offers_none_at_all(hass: HomeAssistant) -> None:
     payload = await payload_for_tool_mode(hass, "none")
     assert "tools" not in payload
     assert "Available tools:" not in payload["messages"][0]["content"]
+
+
+async def payload_with_advanced(
+    hass: HomeAssistant, advanced: dict[str, Any], title: str
+) -> dict[str, Any]:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={CONF_BASE_URL: "http://localhost:8000"},
+        subentries_data=[
+            {
+                "subentry_type": SUBENTRY_TYPE_CONVERSATION,
+                "title": title,
+                "unique_id": None,
+                "data": {CONF_MODEL: "qwen3", CONF_ADVANCED: advanced},
+            }
+        ],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    sent: list[dict[str, Any]] = []
+
+    def capture(payload: dict[str, Any]):
+        sent.append(payload)
+        return reply(payload)
+
+    with patch.object(entry.runtime_data, "async_stream_chat", side_effect=capture):
+        await conversation.async_converse(
+            hass,
+            "Hello",
+            None,
+            Context(),
+            agent_id=f"conversation.{title.lower().replace(' ', '_')}",
+        )
+    return sent[0]
+
+
+async def test_untouched_sampling_settings_are_not_sent(hass: HomeAssistant) -> None:
+    """Anthropic refuses a request that sets both temperature and top_p."""
+    payload = await payload_with_advanced(hass, {}, "Defaults")
+    assert "temperature" not in payload
+    assert "top_p" not in payload
+
+
+async def test_a_changed_sampling_setting_is_sent_alone(hass: HomeAssistant) -> None:
+    payload = await payload_with_advanced(hass, {"temperature": 0.2}, "Warm")
+    assert payload["temperature"] == 0.2
+    assert "top_p" not in payload
+
+
+async def test_both_are_sent_when_both_were_changed(hass: HomeAssistant) -> None:
+    """Setting both is a deliberate act and stays possible."""
+    payload = await payload_with_advanced(
+        hass, {"temperature": 0.2, "top_p": 0.5}, "Both"
+    )
+    assert payload["temperature"] == 0.2
+    assert payload["top_p"] == 0.5
+
+
+async def test_no_language_is_forced_by_default(hass: HomeAssistant) -> None:
+    payload = await payload_with_advanced(hass, {}, "Auto")
+    assert "IETF" not in payload["messages"][0]["content"]
+
+
+async def test_a_chosen_language_is_pinned_in_the_prompt(hass: HomeAssistant) -> None:
+    """Verified against a live model: the IETF tag alone is enough to switch it."""
+    payload = await payload_with_advanced(hass, {"language": "nl"}, "Dutch")
+    system = payload["messages"][0]["content"]
+    assert "language tag 'nl'" in system
+    assert "whatever language you are addressed in" in system
