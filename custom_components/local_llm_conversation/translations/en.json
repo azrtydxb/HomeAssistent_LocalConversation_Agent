@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your LLM endpoint",
+        "description": "Point this at any OpenAI-compatible server, such as vLLM, SGLang, LiteLLM or fastllm proxy. The URL may be the host on its own; /v1 is added if missing.\n\nModels found: {models}",
+        "data": {
+          "base_url": "Base URL",
+          "api_key": "API key",
+          "model": "Model"
+        },
+        "data_description": {
+          "base_url": "For example http://192.168.1.10:8000",
+          "api_key": "Leave empty if the endpoint needs no authentication.",
+          "model": "Leave empty to use the endpoint's only model."
+        }
+      }
+    },
+    "error": {
+      "model_required": "The endpoint serves more than one model, or did not list any. Enter a model name."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Agent behaviour",
+        "data": {
+          "model": "Model",
+          "prompt": "Instructions",
+          "llm_hass_api": "Control Home Assistant",
+          "max_tokens": "Maximum tokens to return",
+          "temperature": "Temperature",
+          "top_p": "Top P",
+          "timeout": "Response timeout (seconds)",
+          "supports_tools": "Endpoint supports tool calling"
+        },
+        "data_description": {
+          "prompt": "Replaces the default system prompt. Leave empty to use Home Assistant's.",
+          "llm_hass_api": "Which tool APIs the model may use. Without one it can talk but not act.",
+          "timeout": "How long to wait between streamed tokens before giving up.",
+          "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
+        }
+      }
+    }
+  }
+}

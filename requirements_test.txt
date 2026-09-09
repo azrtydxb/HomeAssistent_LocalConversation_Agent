@@ -1,0 +1,6 @@
+pytest-homeassistant-custom-component
+# Pulled in by homeassistant.components.conversation but not by the test harness.
+hassil
+home-assistant-intents
+gazetteer-matcher
+voluptuous-openapi
