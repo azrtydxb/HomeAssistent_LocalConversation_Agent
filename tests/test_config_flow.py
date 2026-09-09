@@ -1,5 +1,7 @@
 """Tests for the provider config flow and the model subentry flow."""
 
+from unittest.mock import patch
+
 import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, CONF_NAME
@@ -15,6 +17,7 @@ from custom_components.local_llm_conversation.const import (
     CONF_MODEL,
     CONF_PROMPT,
     CONF_SUPPORTS_TOOLS,
+    CONF_VISION,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_SOUL,
     DOMAIN,
@@ -57,9 +60,27 @@ async def start_reconfigure(hass: HomeAssistant, entry):
 
 
 async def open_model_form(hass: HomeAssistant, entry):
+    """Open the model picker, the first step of adding a model."""
     return await hass.config_entries.subentries.async_init(
         (entry.entry_id, SUBENTRY_TYPE_CONVERSATION),
         context={"source": config_entries.SOURCE_USER},
+    )
+
+
+async def choose_model(hass: HomeAssistant, entry, model="qwen3-32b", name="Voice"):
+    """Pick a model and advance to the settings step, probing on the way."""
+    result = await open_model_form(hass, entry)
+    return await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {CONF_NAME: name, CONF_MODEL: model}
+    )
+
+
+def probing(detected):
+    """Patch the vision probe, which runs when a model is chosen."""
+    return patch(
+        "custom_components.local_llm_conversation.client.ChatCompletionsClient"
+        ".async_probe_vision",
+        return_value=detected,
     )
 
 
@@ -131,11 +152,12 @@ async def test_everyday_settings_are_visible_and_the_rest_folded_away(
     """Most people never touch temperature or the persona."""
     two_models(aioclient_mock)
     entry = (await add_provider(hass))["result"]
-    result = await open_model_form(hass, entry)
+    with probing(True):
+        result = await choose_model(hass, entry)
 
     schema = result["data_schema"].schema
     visible = [str(key) for key in schema if not isinstance(schema[key], section)]
-    assert visible == [CONF_NAME, CONF_MODEL, CONF_LLM_HASS_API, CONF_ASSISTANT_NAME]
+    assert visible == [CONF_LLM_HASS_API, CONF_ASSISTANT_NAME]
 
     advanced = schema[CONF_ADVANCED]
     assert isinstance(advanced, section)
@@ -164,7 +186,8 @@ async def test_the_soul_is_prefilled_and_the_name_defaults_to_jarvis(
 ) -> None:
     two_models(aioclient_mock)
     entry = (await add_provider(hass))["result"]
-    result = await open_model_form(hass, entry)
+    with probing(True):
+        result = await choose_model(hass, entry)
 
     schema = result["data_schema"].schema
     name_key = next(key for key in schema if str(key) == CONF_ASSISTANT_NAME)
@@ -180,12 +203,11 @@ async def test_adding_a_model_creates_a_subentry(
 ) -> None:
     two_models(aioclient_mock)
     entry = (await add_provider(hass))["result"]
-    result = await open_model_form(hass, entry)
+    with probing(True):
+        result = await choose_model(hass, entry)
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
         {
-            CONF_NAME: "Voice",
-            CONF_MODEL: "qwen3-32b",
             CONF_LLM_HASS_API: ["assist"],
             CONF_ASSISTANT_NAME: "Jarvis",
             CONF_ADVANCED: {},
@@ -208,12 +230,11 @@ async def test_two_models_on_one_provider_each_get_an_agent(
     entry = (await add_provider(hass))["result"]
 
     for name, model in (("Voice", "qwen3-32b"), ("Study", "llama-3.3-70b")):
-        result = await open_model_form(hass, entry)
+        with probing(True):
+            result = await choose_model(hass, entry, model=model, name=name)
         result = await hass.config_entries.subentries.async_configure(
             result["flow_id"],
             {
-                CONF_NAME: name,
-                CONF_MODEL: model,
                 CONF_LLM_HASS_API: ["assist"],
                 CONF_ASSISTANT_NAME: "Jarvis",
                 CONF_ADVANCED: {},
@@ -300,3 +321,111 @@ async def test_the_api_key_is_masked(hass: HomeAssistant) -> None:
     selector = result["data_schema"].schema[CONF_API_KEY]
     assert isinstance(selector, TextSelector)
     assert selector.config["type"] == "password"
+
+
+async def test_the_model_is_probed_when_it_is_chosen(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """The result is shown while configuring, not discovered later in use."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    with probing(True):
+        result = await choose_model(hass, entry)
+
+    assert result["step_id"] == "settings"
+    assert result["description_placeholders"] == {
+        "model": "qwen3-32b",
+        "vision": "yes, this model reads images",
+    }
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    vision = next(key for key in advanced if str(key) == CONF_VISION)
+    assert vision.default() is True
+
+
+async def test_a_model_that_ignores_images_gets_vision_turned_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    with probing(False):
+        result = await choose_model(hass, entry)
+
+    assert result["description_placeholders"]["vision"] == (
+        "no, this model ignores images"
+    )
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    vision = next(key for key in advanced if str(key) == CONF_VISION)
+    assert vision.default() is False
+
+
+async def test_the_user_can_turn_vision_off_on_a_model_that_supports_it(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Detection sets the default; the household still decides."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    with probing(True):
+        result = await choose_model(hass, entry)
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_LLM_HASS_API: ["assist"],
+            CONF_ASSISTANT_NAME: "Jarvis",
+            CONF_ADVANCED: {CONF_VISION: False},
+        },
+    )
+    await hass.async_block_till_done()
+
+    subentry = next(iter(entry.subentries.values()))
+    assert subentry.data[CONF_ADVANCED][CONF_VISION] is False
+
+
+async def test_switching_to_a_model_without_vision_turns_it_off_again(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Vision on from a previous model must not carry to one that cannot see."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    with probing(True):
+        result = await choose_model(hass, entry)
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_LLM_HASS_API: ["assist"],
+            CONF_ASSISTANT_NAME: "Jarvis",
+            CONF_ADVANCED: {CONF_VISION: True},
+        },
+    )
+    await hass.async_block_till_done()
+
+    subentry = next(iter(entry.subentries.values()))
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "subentry_id": subentry.subentry_id,
+        },
+    )
+    with probing(False):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {CONF_MODEL: "llama-3.3-70b"}
+        )
+
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    vision = next(key for key in advanced if str(key) == CONF_VISION)
+    assert vision.default() is False
+
+
+async def test_an_undecidable_probe_leaves_images_off(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Sending images a model may ignore wastes tokens for nothing."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    with probing(None):
+        result = await choose_model(hass, entry)
+
+    assert "could not be determined" in result["description_placeholders"]["vision"]
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    vision = next(key for key in advanced if str(key) == CONF_VISION)
+    assert vision.default() is False

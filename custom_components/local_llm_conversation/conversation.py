@@ -31,6 +31,7 @@ from .const import (
     CONF_SUPPORTS_TOOLS,
     CONF_TEMPERATURE,
     CONF_THINKING,
+    CONF_VISION,
     CONF_TOP_P,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_MAX_TOKENS,
@@ -136,6 +137,14 @@ def _attached_images(
         for attachment in content.attachments or []
         if (url := images.get(str(attachment.path)))
     ]
+
+
+def _has_attachments(chat_log: conversation.ChatLog) -> bool:
+    """Return whether this conversation carries anything to look at."""
+    return any(
+        content.role == "user" and bool(content.attachments)
+        for content in chat_log.content
+    )
 
 
 async def _async_load_images(
@@ -332,7 +341,13 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
             return err.as_conversation_result()
 
         client: ChatCompletionsClient = self.entry.runtime_data
-        images = await _async_load_images(self.hass, chat_log)
+        # Whether this model reads images was settled by probing it when it was
+        # chosen; the setting can then be turned off by hand.
+        images = (
+            await _async_load_images(self.hass, chat_log)
+            if options.get(CONF_VISION) and _has_attachments(chat_log)
+            else {}
+        )
         tools: list[dict[str, Any]] | None = None
         if chat_log.llm_api and options.get(CONF_SUPPORTS_TOOLS, True):
             tools = [

@@ -56,17 +56,26 @@
       "entry_type": "Conversation agent",
       "step": {
         "user": {
-          "title": "Model settings",
+          "title": "Choose a model",
+          "description": "Pick a model from the provider. It is then tested to see what it supports.",
           "data": {
             "name": "Name",
-            "model": "Model",
+            "model": "Model"
+          },
+          "data_description": {
+            "name": "Shown in Home Assistant, for example Voice or Study.",
+            "model": "Chosen from what the provider serves. Type a name if it is not listed."
+          }
+        },
+        "settings": {
+          "title": "Model settings",
+          "description": "{model}\n\nReads images: {vision}",
+          "data": {
             "llm_hass_api": "Control Home Assistant",
             "assistant_name": "Assistant name",
             "advanced": "Advanced"
           },
           "data_description": {
-            "name": "Shown in Home Assistant, for example Voice or Study.",
-            "model": "Chosen from what the provider serves. Type a name if it is not listed.",
             "llm_hass_api": "Which tool APIs the model may use. Without one it can talk but not act.",
             "assistant_name": "What the agent calls itself. Match your wake word so it stays consistent."
           },
@@ -75,19 +84,21 @@
               "name": "Advanced",
               "data": {
                 "prompt": "Soul",
+                "vision": "Send images to this model",
+                "thinking": "Let the model think first",
                 "max_tokens": "Maximum tokens to return",
                 "temperature": "Temperature",
                 "top_p": "Top P",
                 "timeout": "Response timeout (seconds)",
-                "supports_tools": "Endpoint supports tool calling",
-                "thinking": "Let the model think first"
+                "supports_tools": "Endpoint supports tool calling"
               },
               "data_description": {
                 "prompt": "The agent's persona. {name} is replaced with the assistant name above.",
+                "vision": "Set from testing the model. Servers accept images for text-only models and quietly ignore them, so this is measured by whether an image costs prompt tokens. Turn it off if you would rather not send camera snapshots.",
+                "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it.",
                 "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
                 "timeout": "How long to wait between streamed tokens before giving up.",
-                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything.",
-                "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it."
+                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
               }
             }
           }

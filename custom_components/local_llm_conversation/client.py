@@ -27,6 +27,26 @@ class InvalidAuth(HomeAssistantError):
 
 
 _DONE = "[DONE]"
+
+# A 256x256 solid PNG, 762 bytes. Large enough that a model which encodes it adds
+# an unmistakable number of prompt tokens, small enough to send twice on a form.
+_PROBE_IMAGE = (
+    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQ0AAAjE"
+    "MED5SeeNBloJS9ZJCr4aCTAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAM"
+    "AAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4AB"
+    "wABgADAAGAAMgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwA"
+    "BgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHA"
+    "AGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAG"
+    "AAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAATAA"
+    "GAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYA"
+    "A4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAbAAGAAMAAY"
+    "AAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAD"
+    "gAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHgWu7LA4CJx71QAAAAAElFTkSu"
+    "QmCC"
+)
+
+# Encoding an image costs far more than this; dropping it costs nothing.
+_VISION_TOKEN_MARGIN = 10
 # Enough of an error body to identify the problem without flooding the log.
 _MAX_ERROR_BODY = 500
 
@@ -110,6 +130,64 @@ class ChatCompletionsClient:
             for model in payload.get("data", [])
             if isinstance(model, dict) and model.get("id")
         )
+
+    async def async_probe_vision(self, model: str) -> bool | None:
+        """Return whether the model actually looks at images.
+
+        A rejected image would be easy to detect, but servers do not reject it:
+        vLLM answers 200 and silently drops the image for a text-only model. What
+        cannot be faked is the token count - encoding an image costs prompt
+        tokens, dropping it costs none. Returns None when the endpoint reports no
+        usage and the question cannot be settled.
+        """
+        text_only = await self._async_probe_tokens(model, image=False)
+        with_image = await self._async_probe_tokens(model, image=True)
+        if text_only is None or with_image is None:
+            return None
+        return with_image - text_only >= _VISION_TOKEN_MARGIN
+
+    async def _async_probe_tokens(self, model: str, *, image: bool) -> int | None:
+        """Return prompt_tokens for a minimal request, or None if unavailable."""
+        content: list[dict[str, Any]] = [{"type": "text", "text": "hi"}]
+        if image:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{_PROBE_IMAGE}"},
+                }
+            )
+        payload = {
+            "model": model,
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": content}],
+        }
+        try:
+            async with self._session.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers,
+                json=payload,
+                timeout=self._timeout,
+            ) as response:
+                if response.status != 200:
+                    # 4xx means the request was understood and refused, which for
+                    # an image request means the model takes no images. A 5xx is
+                    # the server failing, and says nothing about the model.
+                    if image and 400 <= response.status < 500:
+                        return 0
+                    LOGGER.debug(
+                        "Vision probe for %s got %s: %s",
+                        model,
+                        response.status,
+                        (await response.text())[:_MAX_ERROR_BODY],
+                    )
+                    return None
+                body = await response.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            LOGGER.debug("Vision probe failed for %s: %s", model, err)
+            return None
+        usage = body.get("usage") or {}
+        tokens = usage.get("prompt_tokens")
+        return tokens if isinstance(tokens, int) else None
 
     async def async_stream_chat(
         self, payload: dict[str, Any]

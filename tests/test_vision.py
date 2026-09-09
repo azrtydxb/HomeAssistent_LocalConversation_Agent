@@ -2,6 +2,7 @@
 
 import base64
 from pathlib import Path
+from unittest.mock import patch
 
 from homeassistant.components import conversation
 from homeassistant.core import HomeAssistant
@@ -103,3 +104,63 @@ async def test_several_images_all_reach_the_model(
     kinds = [part["type"] for part in message["content"]]
     assert kinds == ["text", "image_url", "image_url"]
     assert message["content"][2]["image_url"]["url"].startswith("data:image/jpeg;")
+
+
+# --- capability detection ---------------------------------------------------
+
+
+async def test_vision_is_detected_by_token_cost_not_by_a_refusal(
+    hass: HomeAssistant, aioclient_mock
+) -> None:
+    """Servers do not refuse images for text-only models, they ignore them.
+
+    vLLM answers 200 to an image sent to a text-only model and silently drops it,
+    so anything based on the response succeeding reports vision on every model.
+    Encoding an image costs prompt tokens; dropping it costs none.
+    """
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    from custom_components.local_llm_conversation.client import ChatCompletionsClient
+
+    responses = [
+        {"usage": {"prompt_tokens": 11}},  # text only
+        {"usage": {"prompt_tokens": 77}},  # image encoded
+    ]
+    aioclient_mock.post(
+        "http://host:8000/v1/chat/completions", side_effect=lambda *a, **k: responses
+    )
+    client = ChatCompletionsClient(
+        async_get_clientsession(hass), "http://host:8000", None, 30
+    )
+    with patch.object(client, "_async_probe_tokens", side_effect=[11, 77]):
+        assert await client.async_probe_vision("qwen") is True
+    with patch.object(client, "_async_probe_tokens", side_effect=[11, 11]):
+        assert await client.async_probe_vision("qwen") is False
+
+
+async def test_an_endpoint_reporting_no_usage_leaves_it_undecided(
+    hass: HomeAssistant,
+) -> None:
+    """Guessing yes would send images a model ignores; guessing no is safer."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+    from custom_components.local_llm_conversation.client import ChatCompletionsClient
+
+    client = ChatCompletionsClient(
+        async_get_clientsession(hass), "http://host:8000", None, 30
+    )
+    with patch.object(client, "_async_probe_tokens", side_effect=[None, None]):
+        assert await client.async_probe_vision("qwen") is None
+
+
+async def test_a_conversation_without_attachments_is_recognised_as_such(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """The images are only read when there is something to look at."""
+    from custom_components.local_llm_conversation.conversation import _has_attachments
+
+    plain = conversation.UserContent(content="Turn on the light")
+    assert _has_attachments(FakeLog(plain)) is False
+
+    with_image = user_with(tmp_path, ("door.png", "image/png", PNG))
+    assert _has_attachments(FakeLog(plain, with_image)) is True

@@ -81,9 +81,22 @@ prefix stays stable across turns and prefill stays cheap.
 ### Vision
 
 Image attachments are passed through to the model, so a camera snapshot can be
-part of the question — "who is at the front door?". The provider must be serving
-a vision-capable model. Non-image attachments are skipped, and a snapshot that has
-since been deleted is dropped rather than failing the turn.
+part of the question — "who is at the front door?".
+
+Whether a model reads images is settled by testing it when you pick it, and the
+setting is turned on or off from the result. You can still turn it off afterwards
+under Advanced.
+
+The test is not "does the endpoint accept an image": vLLM answers `200` to an
+image sent to a text-only model and silently drops it, so that would report vision
+on every model. What cannot be faked is the token count — encoding an image costs
+prompt tokens, ignoring it costs none — so the same tiny request is sent with and
+without an image and the two are compared. If the endpoint reports no token usage
+the question cannot be settled, and images stay off rather than being sent to a
+model that may ignore them.
+
+Non-image attachments are skipped, and a snapshot deleted between turns is dropped
+rather than failing the conversation.
 
 ## When things go wrong
 

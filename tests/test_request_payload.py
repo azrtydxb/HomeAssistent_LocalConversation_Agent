@@ -154,3 +154,99 @@ async def test_the_request_prefix_is_byte_stable_across_turns(
         assert json.dumps(payload.get("tools")) == json.dumps(first.get("tools"))
         # The system prompt is the bulk of the prefix.
         assert payload["messages"][0] == first["messages"][0]
+
+
+async def ask_with_image(hass: HomeAssistant, tmp_path, vision: bool) -> dict[str, Any]:
+    """Run one turn carrying a snapshot and return the payload that was sent."""
+    from homeassistant.components.conversation import (
+        Attachment,
+        ConversationInput,
+        UserContent,
+        async_get_chat_log,
+    )
+    from homeassistant.helpers import chat_session
+
+    from custom_components.local_llm_conversation.const import CONF_VISION
+
+    png = tmp_path / "door.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={CONF_BASE_URL: "http://localhost:8000"},
+        subentries_data=[
+            {
+                "subentry_type": SUBENTRY_TYPE_CONVERSATION,
+                "title": f"Voice {vision}",
+                "unique_id": None,
+                "data": {
+                    CONF_MODEL: "qwen3",
+                    CONF_ADVANCED: {CONF_VISION: vision},
+                },
+            }
+        ],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    agent = hass.data["entity_components"]["conversation"].get_entity(
+        f"conversation.voice_{str(vision).lower()}"
+    )
+    user_input = ConversationInput(
+        text="Who is at the door?",
+        context=Context(),
+        conversation_id=None,
+        device_id=None,
+        satellite_id=None,
+        language="en",
+        agent_id=agent.entity_id,
+    )
+
+    sent: list[dict[str, Any]] = []
+
+    def capture(payload: dict[str, Any]):
+        sent.append(payload)
+        return reply(payload)
+
+    with (
+        patch.object(entry.runtime_data, "async_stream_chat", side_effect=capture),
+        chat_session.async_get_chat_session(hass) as session,
+        async_get_chat_log(hass, session) as chat_log,
+    ):
+        chat_log.async_add_user_content(
+            UserContent(
+                content="Who is at the door?",
+                attachments=[
+                    Attachment(
+                        media_content_id="media://door",
+                        mime_type="image/png",
+                        path=png,
+                    )
+                ],
+            )
+        )
+        await agent._async_handle_message(user_input, chat_log)
+
+    return sent[0]
+
+
+def carries_an_image(payload: dict[str, Any]) -> bool:
+    content = payload["messages"][-1]["content"]
+    return isinstance(content, list) and any(
+        part["type"] == "image_url" for part in content
+    )
+
+
+async def test_a_snapshot_reaches_a_model_that_reads_images(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    assert carries_an_image(await ask_with_image(hass, tmp_path, vision=True))
+
+
+async def test_a_snapshot_is_withheld_from_a_model_that_ignores_images(
+    hass: HomeAssistant, tmp_path
+) -> None:
+    """Sending it would cost prompt tokens for something never looked at."""
+    assert not carries_an_image(await ask_with_image(hass, tmp_path, vision=False))

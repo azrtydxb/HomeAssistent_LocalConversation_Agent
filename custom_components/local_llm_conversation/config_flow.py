@@ -49,6 +49,7 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_THINKING,
     CONF_TIMEOUT,
+    CONF_VISION,
     CONF_TOP_P,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_CONVERSATION_NAME,
@@ -211,29 +212,36 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
 class ConversationSubentryFlow(ConfigSubentryFlow):
     """Add or reconfigure one model on a provider."""
 
+    def __init__(self) -> None:
+        """Initialize the flow."""
+        self._chosen: dict[str, Any] = {}
+        self._vision: bool | None = None
+
     @property
     def _is_new(self) -> bool:
         return self.source == "user"
 
+    def _current(self) -> dict[str, Any]:
+        return {} if self._is_new else dict(self._get_reconfigure_subentry().data)
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Configure a model."""
+        """Pick a model, then ask the endpoint what that model can do."""
         entry = self._get_entry()
         if entry.state is not ConfigEntryState.LOADED:
             return self.async_abort(reason="entry_not_loaded")
 
-        if user_input is not None:
-            title = user_input.pop(CONF_NAME, None)
-            if self._is_new:
-                return self.async_create_entry(
-                    title=title or user_input[CONF_MODEL], data=user_input
-                )
-            return self.async_update_and_abort(
-                entry, self._get_reconfigure_subentry(), data=user_input
-            )
+        current = self._current()
 
-        current = {} if self._is_new else dict(self._get_reconfigure_subentry().data)
+        if user_input is not None:
+            self._chosen = user_input
+            # Probing here rather than at first use means the result is visible
+            # while configuring, and the setting follows the model you picked.
+            self._vision = await entry.runtime_data.async_probe_vision(
+                user_input[CONF_MODEL]
+            )
+            return await self.async_step_settings()
 
         try:
             models = await entry.runtime_data.async_list_models()
@@ -242,38 +250,65 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
         if (chosen := current.get(CONF_MODEL)) and chosen not in models:
             models = [*models, chosen]
 
+        schema: dict[Any, Any] = {}
+        if self._is_new:
+            # pylint: disable-next=home-assistant-config-flow-name-field
+            schema[vol.Required(CONF_NAME, default=DEFAULT_CONVERSATION_NAME)] = str
+        schema[
+            vol.Required(
+                CONF_MODEL, description={"suggested_value": current.get(CONF_MODEL)}
+            )
+        ] = SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(label=model, value=model) for model in models
+                ],
+                mode=SelectSelectorMode.DROPDOWN,
+                custom_value=True,
+                sort=True,
+            )
+        )
+        return self.async_show_form(step_id="user", data_schema=vol.Schema(schema))
+
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configure how the model behaves."""
+        if user_input is not None:
+            data = {**self._chosen, **user_input}
+            title = data.pop(CONF_NAME, None)
+            if self._is_new:
+                return self.async_create_entry(
+                    title=title or data[CONF_MODEL], data=data
+                )
+            return self.async_update_and_abort(
+                self._get_entry(), self._get_reconfigure_subentry(), data=data
+            )
+
         return self.async_show_form(
-            step_id="user",
-            data_schema=self._schema(models, current),
+            step_id="settings",
+            data_schema=self._schema(self._current()),
+            description_placeholders={
+                "model": self._chosen[CONF_MODEL],
+                "vision": _describe_vision(self._vision),
+            },
         )
 
     async_step_reconfigure = async_step_user
 
-    def _schema(self, models: list[str], current: dict[str, Any]) -> vol.Schema:
+    def _schema(self, current: dict[str, Any]) -> vol.Schema:
         """Build the form: everyday settings first, the rest folded away."""
         advanced = dict(current.get(CONF_ADVANCED, {}))
-        schema: dict[Any, Any] = {}
+        # Never offer images to a model that has just been shown to ignore them,
+        # even if they were on for whatever model this replaces. Where the probe
+        # found support, a previous decision to keep them off still stands.
+        if self._vision:
+            vision_default = advanced.get(CONF_VISION, True)
+        else:
+            vision_default = False
 
-        if self._is_new:
-            # pylint: disable-next=home-assistant-config-flow-name-field
-            schema[vol.Required(CONF_NAME, default=DEFAULT_CONVERSATION_NAME)] = str
-
-        schema.update(
+        return vol.Schema(
             {
-                vol.Required(
-                    CONF_MODEL,
-                    description={"suggested_value": current.get(CONF_MODEL)},
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(label=model, value=model)
-                            for model in models
-                        ],
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                        sort=True,
-                    )
-                ),
                 vol.Optional(
                     CONF_LLM_HASS_API,
                     description={
@@ -305,6 +340,11 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
                                     )
                                 },
                             ): TemplateSelector(),
+                            vol.Optional(CONF_VISION, default=vision_default): bool,
+                            vol.Optional(
+                                CONF_THINKING,
+                                default=advanced.get(CONF_THINKING, DEFAULT_THINKING),
+                            ): bool,
                             vol.Optional(
                                 CONF_MAX_TOKENS,
                                 default=advanced.get(
@@ -338,10 +378,6 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
                                 )
                             ),
                             vol.Optional(
-                                CONF_THINKING,
-                                default=advanced.get(CONF_THINKING, DEFAULT_THINKING),
-                            ): bool,
-                            vol.Optional(
                                 CONF_SUPPORTS_TOOLS,
                                 default=advanced.get(CONF_SUPPORTS_TOOLS, True),
                             ): bool,
@@ -351,4 +387,12 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
                 ),
             }
         )
-        return vol.Schema(schema)
+
+
+def _describe_vision(detected: bool | None) -> str:
+    """Say what the probe found, in words a person can act on."""
+    if detected is None:
+        return "could not be determined - the endpoint reported no token usage"
+    if detected:
+        return "yes, this model reads images"
+    return "no, this model ignores images"
