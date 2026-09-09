@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import ChatCompletionsClient
@@ -19,6 +20,7 @@ from .const import (
     CONF_MODEL,
     CONF_TIMEOUT,
     DEFAULT_TIMEOUT,
+    DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONVERSATION,
 )
@@ -82,6 +84,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_ADVANCED: advanced,
         }
 
+        subentry = ConfigSubentry(
+            data=subentry_data,
+            subentry_type=SUBENTRY_TYPE_CONVERSATION,
+            title=model or entry.title,
+            unique_id=None,
+        )
         hass.config_entries.async_update_entry(
             entry,
             data=data,
@@ -89,14 +97,37 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             title=entry.data.get(CONF_BASE_URL, entry.title),
             version=2,
         )
-        hass.config_entries.async_add_subentry(
-            entry,
-            ConfigSubentry(
-                data=subentry_data,
-                subentry_type=SUBENTRY_TYPE_CONVERSATION,
-                title=model or entry.title,
-                unique_id=None,
-            ),
-        )
+        hass.config_entries.async_add_subentry(entry, subentry)
+        _async_adopt_existing_entity(hass, entry, subentry)
 
     return True
+
+
+@callback
+def _async_adopt_existing_entity(
+    hass: HomeAssistant, entry: ConfigEntry, subentry: ConfigSubentry
+) -> None:
+    """Move the agent that already exists onto the new subentry.
+
+    The entity was keyed by the config entry and is now keyed by the subentry.
+    Left alone, the old registration is orphaned and the new agent appears beside
+    it under a suffixed entity id - so every automation and voice pipeline would
+    still point at an agent that no longer answers.
+    """
+    entities = er.async_get(hass)
+    for registration in er.async_entries_for_config_entry(entities, entry.entry_id):
+        if registration.unique_id != entry.entry_id:
+            continue
+        entities.async_update_entity(
+            registration.entity_id,
+            new_unique_id=subentry.subentry_id,
+            config_subentry_id=subentry.subentry_id,
+        )
+
+    devices = dr.async_get(hass)
+    if device := devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)}):
+        devices.async_update_device(
+            device.id,
+            new_identifiers={(DOMAIN, subentry.subentry_id)},
+            add_config_subentry_id=subentry.subentry_id,
+        )

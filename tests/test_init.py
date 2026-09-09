@@ -176,3 +176,42 @@ async def test_the_default_soul_is_used_when_none_is_set(hass: HomeAssistant) ->
     agent = LocalLLMConversationEntity(entry, next(iter(entry.subentries.values())))
     assert agent._soul.startswith("You are Jarvis, the digital butler")
     assert "{name}" not in agent._soul
+
+
+async def test_migration_keeps_the_existing_entity_id(hass: HomeAssistant) -> None:
+    """The agent must survive the migration under its original entity id.
+
+    The entity was keyed by the config entry and is now keyed by the subentry. If
+    the old registration is not carried over, the migrated agent appears beside it
+    with a _2 suffix and every voice pipeline keeps pointing at the dead one.
+    """
+    from homeassistant.helpers import entity_registry as er
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        title="qwen3",
+        data={CONF_BASE_URL: "http://localhost:8000", CONF_MODEL: "qwen3"},
+        options={CONF_LLM_HASS_API: ["assist"]},
+    )
+    entry.add_to_hass(hass)
+
+    entities = er.async_get(hass)
+    original = entities.async_get_or_create(
+        "conversation",
+        DOMAIN,
+        entry.entry_id,
+        config_entry=entry,
+        suggested_object_id="qwen3",
+    )
+    assert original.entity_id == "conversation.qwen3"
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert conversation_entities(hass) == ["conversation.qwen3"]
+
+    subentry = next(iter(entry.subentries.values()))
+    migrated = entities.async_get("conversation.qwen3")
+    assert migrated.unique_id == subentry.subentry_id
+    assert migrated.config_subentry_id == subentry.subentry_id
