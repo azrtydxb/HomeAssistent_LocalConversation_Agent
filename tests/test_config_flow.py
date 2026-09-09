@@ -288,3 +288,67 @@ async def test_reconfigure_refuses_to_collide_with_another_provider(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert first.data[CONF_BASE_URL] == "http://host:8000"
+
+
+async def test_the_api_key_is_masked(hass: HomeAssistant) -> None:
+    """The key is a secret and should not sit in plain sight on screen."""
+    from homeassistant.helpers.selector import TextSelector
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    selector = result["data_schema"].schema[CONF_API_KEY]
+    assert isinstance(selector, TextSelector)
+    assert selector.config["type"] == "password"
+
+
+async def test_reply_length_is_capped_by_the_announced_context_window(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A reply cannot be longer than the window it is generated into."""
+    aioclient_mock.get(
+        MODELS_URL, json={"data": [{"id": "qwen3-32b", "max_model_len": 262144}]}
+    )
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Voice",
+            CONF_MODEL: "qwen3-32b",
+            CONF_LLM_HASS_API: ["assist"],
+            CONF_ASSISTANT_NAME: "Jarvis",
+            CONF_ADVANCED: {},
+        },
+    )
+    await hass.async_block_till_done()
+
+    subentry = next(iter(entry.subentries.values()))
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "subentry_id": subentry.subentry_id,
+        },
+    )
+
+    assert result["description_placeholders"] == {"context": "262,144 tokens"}
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    max_tokens = next(k for k in advanced if str(k) == "max_tokens")
+    assert advanced[max_tokens].config["max"] == 262144
+
+
+async def test_an_endpoint_that_announces_nothing_still_works(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A fastllm proxy strips max_model_len; the form must not break on that."""
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    result = await open_model_form(hass, entry)
+
+    assert result["description_placeholders"] == {
+        "context": "not announced by this endpoint"
+    }
+    advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
+    max_tokens = next(k for k in advanced if str(k) == "max_tokens")
+    assert advanced[max_tokens].config["max"] == 65536

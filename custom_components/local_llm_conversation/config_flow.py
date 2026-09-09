@@ -31,9 +31,12 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TemplateSelector,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
-from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
+from .client import CannotConnect, ChatCompletionsClient, InvalidAuth, ModelInfo
 from .const import (
     CONF_ADVANCED,
     CONF_ASSISTANT_NAME,
@@ -59,9 +62,14 @@ from .const import (
 STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_BASE_URL): str,
-        vol.Optional(CONF_API_KEY): str,
+        vol.Optional(CONF_API_KEY): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.PASSWORD)
+        ),
     }
 )
+
+# Ceiling for the output budget when the endpoint announces no context window.
+FALLBACK_CONTEXT = 65536
 
 
 class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -187,19 +195,29 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
             models = await entry.runtime_data.async_list_models()
         except (CannotConnect, InvalidAuth):
             models = []
-        if (chosen := current.get(CONF_MODEL)) and chosen not in models:
-            models = [*models, chosen]
+        known = {model.id: model for model in models}
+        if (chosen := current.get(CONF_MODEL)) and chosen not in known:
+            known[chosen] = ModelInfo(id=chosen)
 
         return self.async_show_form(
             step_id="user",
-            data_schema=self._schema(models, current),
+            data_schema=self._schema(list(known.values()), current),
+            description_placeholders={
+                "context": _describe_context(known.get(current.get(CONF_MODEL)))
+            },
         )
 
     async_step_reconfigure = async_step_user
 
-    def _schema(self, models: list[str], current: dict[str, Any]) -> vol.Schema:
+    def _schema(self, models: list[ModelInfo], current: dict[str, Any]) -> vol.Schema:
         """Build the form: everyday settings first, the rest folded away."""
         advanced = dict(current.get(CONF_ADVANCED, {}))
+        chosen = next(
+            (model for model in models if model.id == current.get(CONF_MODEL)), None
+        )
+        # A reply can never be longer than the window it is generated into. Where
+        # the endpoint announces the window, use it instead of an arbitrary cap.
+        max_output = (chosen.context_length if chosen else None) or FALLBACK_CONTEXT
         schema: dict[Any, Any] = {}
 
         if self._is_new:
@@ -214,7 +232,7 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
                 ): SelectSelector(
                     SelectSelectorConfig(
                         options=[
-                            SelectOptionDict(label=model, value=model)
+                            SelectOptionDict(label=model.id, value=model.id)
                             for model in models
                         ],
                         mode=SelectSelectorMode.DROPDOWN,
@@ -260,7 +278,9 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
                                 ),
                             ): NumberSelector(
                                 NumberSelectorConfig(
-                                    min=1, max=65536, mode=NumberSelectorMode.BOX
+                                    min=1,
+                                    max=max_output,
+                                    mode=NumberSelectorMode.BOX,
                                 )
                             ),
                             vol.Optional(
@@ -296,3 +316,10 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
             }
         )
         return vol.Schema(schema)
+
+
+def _describe_context(model: ModelInfo | None) -> str:
+    """Describe the chosen model's context window for the form."""
+    if model is None or model.context_length is None:
+        return "not announced by this endpoint"
+    return f"{model.context_length:,} tokens"

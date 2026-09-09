@@ -54,8 +54,14 @@ _Settings → Voice assistants_.
 | Instructions                         | Replaces Home Assistant's default system prompt.                                                                           |
 | Control Home Assistant               | Which tool APIs the model may use. Without one it can talk but not act.                                                    |
 | Maximum tokens / Temperature / Top P | Passed through to the endpoint. Reasoning models spend a large part of this budget before answering, so do not set it low. |
-| Response timeout                     | Time to wait between streamed tokens before giving up.                                                                     |
-| Endpoint supports tool calling       | Turn off only for models that cannot call tools.                                                                           |
+
+The context window is fixed when the server starts and cannot be set from Home
+Assistant — the OpenAI chat API has no such parameter. Where the endpoint
+announces it (`max_model_len` on vLLM and SGLang, `context_length` on OpenRouter
+and LiteLLM) the model form shows it and caps the reply length accordingly.
+Endpoints that announce nothing fall back to a 65536 ceiling.
+| Response timeout | Time to wait between streamed tokens before giving up. |
+| Endpoint supports tool calling | Turn off only for models that cannot call tools. |
 
 ## Notes on performance
 
