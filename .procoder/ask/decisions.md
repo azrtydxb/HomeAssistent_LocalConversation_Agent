@@ -1,6 +1,7 @@
 # Decisions
 
 ## Target scope: local-first or genuinely universal?
+
 **Decided: local-first, but large-context.** Target backends are serious OpenAI-compatible
 serving stacks — fastllm proxy, LiteLLM, vLLM, SGLang. Cloud providers are explicitly out of
 scope as direct targets; they are reached through LiteLLM/fastllm. Local-first does NOT imply
@@ -8,20 +9,24 @@ small context: 256K is common and 1M exists. Context budget is a latency (prefil
 concern, not a capacity one.
 
 ## Custom function layer
+
 **Decided: none for v1.** Rely entirely on HA's built-in Assist LLM API plus MCP servers.
 Revisit only if a concrete gap appears in use.
 
 ## Voice latency / streaming
+
 **Decided: first-class.** Stream deltas promptly, never buffer a whole response, and let the
 HA pipeline start TTS as early as possible.
 
 ## Reasoning-model handling
+
 **Decided: in scope for v1.** Superseded in detail by the findings below: reasoning is not
 stripped but routed to HA's `thinking_content` field. Endpoints returning a `reasoning_content`
 field map directly; models emitting inline `<think>` blocks need a hold-buffer splitter because
 the tag can straddle deltas.
 
 ## Integration domain
+
 **Decided: `local_llm_conversation`** (lowercase snake_case — hassfest rejects uppercase).
 Display name: "Local LLM Conversation". Minimum HA version: TBD — pin to the release that
 introduced `thinking_content`, not blindly to 2026.9.
@@ -60,14 +65,27 @@ Verified against the real endpoint rather than assumed:
 # Open
 
 ## How to deploy to the live HA instance
+
 **Decided: publish as a HACS custom repository** and install from there, rather
 than copying files over SSH or Samba.
 
 ## Which GitHub repository to publish to
+
 HACS does not support private repositories, so the repo must be public. The
 existing remote is an empty PRIVATE repo in the `azrtydxb` org; the authenticated
 gh account is `piwi3910`. The chosen URL must also be written into
 `manifest.json` (`documentation`, `issue_tracker`) and `codeowners`.
+
 - Make the existing `azrtydxb` repo public and push there.
 - New public repo under the `piwi3910` account.
 - New public repo under the `azrtydxb` org, named for the domain.
+
+## BLOCKED: azrtydxb org is disabled
+
+The repo was made public successfully, but `git push` is refused with
+"Repository 'azrtydxb/HomeAssistent_LocalConversation_Agent' is disabled.
+Please ask the owner to check their account." (HTTP 403). This is an
+account-level problem on the org, not a permissions or protocol issue.
+
+- Publish under `piwi3910` instead (authenticated account, working).
+- Fix the azrtydxb account, then retry the push there.

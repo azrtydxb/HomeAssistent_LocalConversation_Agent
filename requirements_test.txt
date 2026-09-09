@@ -1,6 +1,11 @@
-pytest-homeassistant-custom-component
-# Pulled in by homeassistant.components.conversation but not by the test harness.
-hassil
-home-assistant-intents
-gazetteer-matcher
-voluptuous-openapi
+# Pins the Home Assistant version the tests run against. Unpinned, CI resolves an
+# older release whose companion libraries no longer match, and collection fails.
+pytest-homeassistant-custom-component==0.13.364
+
+# Required by homeassistant.components.conversation but not pulled in by the test
+# harness. Versions must match that component's own manifest for the HA release
+# pinned above.
+gazetteer-matcher==1.1.0
+hassil==3.12.0
+home-assistant-intents==2026.8.28
+voluptuous-openapi==0.4.1
