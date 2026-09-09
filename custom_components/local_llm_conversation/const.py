@@ -7,6 +7,7 @@ LOGGER = logging.getLogger(__package__)
 
 # Subentry type: one conversation agent per model on a provider.
 SUBENTRY_TYPE_CONVERSATION = "conversation"
+SUBENTRY_TYPE_AI_TASK = "ai_task_data"
 
 # Provider level.
 CONF_BASE_URL = "base_url"

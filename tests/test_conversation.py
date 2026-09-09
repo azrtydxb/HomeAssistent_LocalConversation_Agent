@@ -6,7 +6,7 @@ import pytest
 from homeassistant.components import conversation
 from homeassistant.helpers import llm
 
-from custom_components.local_llm_conversation.conversation import (
+from custom_components.local_llm_conversation.entity import (
     _convert_content,
     _transform_stream,
 )
@@ -224,7 +224,7 @@ async def test_tools_are_formatted_with_the_serializer_home_assistant_supplies()
     """
     import voluptuous as vol
 
-    from custom_components.local_llm_conversation.conversation import _format_tool
+    from custom_components.local_llm_conversation.entity import _format_tool
 
     class FakeTool(llm.Tool):
         name = "HassTurnOn"

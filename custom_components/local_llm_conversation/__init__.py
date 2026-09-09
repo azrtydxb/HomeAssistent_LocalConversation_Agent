@@ -26,7 +26,7 @@ from .const import (
     SUBENTRY_TYPE_CONVERSATION,
 )
 
-PLATFORMS = [Platform.CONVERSATION]
+PLATFORMS = [Platform.AI_TASK, Platform.CONVERSATION]
 
 type LocalLLMConfigEntry = ConfigEntry[ChatCompletionsClient]
 

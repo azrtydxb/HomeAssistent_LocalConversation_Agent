@@ -98,6 +98,20 @@ model that may ignore them.
 Non-image attachments are skipped, and a snapshot deleted between turns is dropped
 rather than failing the conversation.
 
+## AI Task
+
+A provider can also carry **AI Task** models, which generate data for automations
+rather than holding a conversation — a shopping list from a photo of the fridge, a
+summary of the day. Add one the same way you add a chat model.
+
+When an automation asks for a structure, the schema is sent as `response_format`
+with a JSON schema, which vLLM honours. vLLM's own `guided_json` is deliberately
+not used: proxies in front of it pass the field through untouched and the model
+then answers in prose, which looks like the constraint silently failing. If an
+endpoint ignores `response_format` too, the task fails with a message saying the
+model did not return the requested structure, rather than handing an automation
+a paragraph where it expected fields.
+
 ## When things go wrong
 
 The provider is contacted once at startup. If it cannot be reached, Home

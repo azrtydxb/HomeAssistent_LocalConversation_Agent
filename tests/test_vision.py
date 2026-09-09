@@ -7,7 +7,7 @@ from unittest.mock import patch
 from homeassistant.components import conversation
 from homeassistant.core import HomeAssistant
 
-from custom_components.local_llm_conversation.conversation import (
+from custom_components.local_llm_conversation.entity import (
     _async_load_images,
     _convert_content,
 )
@@ -157,7 +157,7 @@ async def test_a_conversation_without_attachments_is_recognised_as_such(
     hass: HomeAssistant, tmp_path: Path
 ) -> None:
     """The images are only read when there is something to look at."""
-    from custom_components.local_llm_conversation.conversation import _has_attachments
+    from custom_components.local_llm_conversation.entity import _has_attachments
 
     plain = conversation.UserContent(content="Turn on the light")
     assert _has_attachments(FakeLog(plain)) is False

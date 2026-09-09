@@ -8,3 +8,6 @@ pytest-homeassistant-custom-component==0.13.364
 gazetteer-matcher==1.1.0
 hassil==3.12.0
 home-assistant-intents==2026.8.28
+
+# Pulled in transitively by the ai_task platform's dependency chain.
+PyTurboJPEG==1.8.3

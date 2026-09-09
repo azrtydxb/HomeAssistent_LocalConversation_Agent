@@ -60,6 +60,7 @@ from .const import (
     DEFAULT_TIMEOUT,
     DEFAULT_TOP_P,
     DOMAIN,
+    SUBENTRY_TYPE_AI_TASK,
     SUBENTRY_TYPE_CONVERSATION,
 )
 
@@ -205,11 +206,14 @@ class LocalLLMConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        """Each model on the provider is a conversation subentry."""
-        return {SUBENTRY_TYPE_CONVERSATION: ConversationSubentryFlow}
+        """A provider carries chat agents and task workers, one per model."""
+        return {
+            SUBENTRY_TYPE_CONVERSATION: ModelSubentryFlow,
+            SUBENTRY_TYPE_AI_TASK: ModelSubentryFlow,
+        }
 
 
-class ConversationSubentryFlow(ConfigSubentryFlow):
+class ModelSubentryFlow(ConfigSubentryFlow):
     """Add or reconfigure one model on a provider."""
 
     def __init__(self) -> None:
@@ -296,6 +300,11 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
 
     async_step_reconfigure = async_step_user
 
+    @property
+    def _is_conversation(self) -> bool:
+        """A task worker generates data and has no persona to speak with."""
+        return self._subentry_type == SUBENTRY_TYPE_CONVERSATION
+
     def _schema(self, current: dict[str, Any]) -> vol.Schema:
         """Build the form: everyday settings first, the rest folded away."""
         advanced = dict(current.get(CONF_ADVANCED, {}))
@@ -307,86 +316,86 @@ class ConversationSubentryFlow(ConfigSubentryFlow):
         else:
             vision_default = False
 
-        return vol.Schema(
-            {
-                vol.Optional(
-                    CONF_LLM_HASS_API,
-                    description={
-                        "suggested_value": current.get(
-                            CONF_LLM_HASS_API, [llm.LLM_API_ASSIST]
+        schema: dict[Any, Any] = {}
+        if self._is_conversation:
+            schema.update(
+                {
+                    vol.Optional(
+                        CONF_LLM_HASS_API,
+                        description={
+                            "suggested_value": current.get(
+                                CONF_LLM_HASS_API, [llm.LLM_API_ASSIST]
+                            )
+                        },
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(label=api.name, value=api.id)
+                                for api in llm.async_get_apis(self.hass)
+                            ],
+                            multiple=True,
                         )
-                    },
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(label=api.name, value=api.id)
-                            for api in llm.async_get_apis(self.hass)
-                        ],
-                        multiple=True,
-                    )
-                ),
-                vol.Required(
-                    CONF_ASSISTANT_NAME,
-                    default=current.get(CONF_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME),
-                ): str,
-                vol.Required(CONF_ADVANCED): section(
-                    vol.Schema(
-                        {
-                            vol.Optional(
-                                CONF_PROMPT,
-                                description={
-                                    "suggested_value": advanced.get(
-                                        CONF_PROMPT, DEFAULT_SOUL
-                                    )
-                                },
-                            ): TemplateSelector(),
-                            vol.Optional(CONF_VISION, default=vision_default): bool,
-                            vol.Optional(
-                                CONF_THINKING,
-                                default=advanced.get(CONF_THINKING, DEFAULT_THINKING),
-                            ): bool,
-                            vol.Optional(
-                                CONF_MAX_TOKENS,
-                                default=advanced.get(
-                                    CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS
-                                ),
-                            ): NumberSelector(
-                                NumberSelectorConfig(
-                                    min=1, max=65536, mode=NumberSelectorMode.BOX
-                                )
-                            ),
-                            vol.Optional(
-                                CONF_TEMPERATURE,
-                                default=advanced.get(
-                                    CONF_TEMPERATURE, DEFAULT_TEMPERATURE
-                                ),
-                            ): NumberSelector(
-                                NumberSelectorConfig(min=0, max=2, step=0.05)
-                            ),
-                            vol.Optional(
-                                CONF_TOP_P,
-                                default=advanced.get(CONF_TOP_P, DEFAULT_TOP_P),
-                            ): NumberSelector(
-                                NumberSelectorConfig(min=0, max=1, step=0.05)
-                            ),
-                            vol.Optional(
-                                CONF_TIMEOUT,
-                                default=advanced.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
-                            ): NumberSelector(
-                                NumberSelectorConfig(
-                                    min=5, max=900, mode=NumberSelectorMode.BOX
-                                )
-                            ),
-                            vol.Optional(
-                                CONF_SUPPORTS_TOOLS,
-                                default=advanced.get(CONF_SUPPORTS_TOOLS, True),
-                            ): bool,
-                        }
                     ),
-                    {"collapsed": True},
+                    vol.Required(
+                        CONF_ASSISTANT_NAME,
+                        default=current.get(
+                            CONF_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME
+                        ),
+                    ): str,
+                }
+            )
+
+        inner: dict[Any, Any] = {}
+        if self._is_conversation:
+            inner[
+                vol.Optional(
+                    CONF_PROMPT,
+                    description={
+                        "suggested_value": advanced.get(CONF_PROMPT, DEFAULT_SOUL)
+                    },
+                )
+            ] = TemplateSelector()
+        inner.update(
+            {
+                vol.Optional(CONF_VISION, default=vision_default): bool,
+                vol.Optional(
+                    CONF_THINKING,
+                    default=advanced.get(CONF_THINKING, DEFAULT_THINKING),
+                ): bool,
+                vol.Optional(
+                    CONF_MAX_TOKENS,
+                    default=advanced.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                ): NumberSelector(
+                    NumberSelectorConfig(min=1, max=65536, mode=NumberSelectorMode.BOX)
+                ),
+                vol.Optional(
+                    CONF_TEMPERATURE,
+                    default=advanced.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+                ): NumberSelector(NumberSelectorConfig(min=0, max=2, step=0.05)),
+                vol.Optional(
+                    CONF_TOP_P,
+                    default=advanced.get(CONF_TOP_P, DEFAULT_TOP_P),
+                ): NumberSelector(NumberSelectorConfig(min=0, max=1, step=0.05)),
+                vol.Optional(
+                    CONF_TIMEOUT,
+                    default=advanced.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
+                ): NumberSelector(
+                    NumberSelectorConfig(min=5, max=900, mode=NumberSelectorMode.BOX)
                 ),
             }
         )
+        if self._is_conversation:
+            # A task worker is given no tool API, so the switch would do nothing.
+            inner[
+                vol.Optional(
+                    CONF_SUPPORTS_TOOLS,
+                    default=advanced.get(CONF_SUPPORTS_TOOLS, True),
+                )
+            ] = bool
+        schema[vol.Required(CONF_ADVANCED)] = section(
+            vol.Schema(inner), {"collapsed": True}
+        )
+        return vol.Schema(schema)
 
 
 def _describe_vision(detected: bool | None) -> str:

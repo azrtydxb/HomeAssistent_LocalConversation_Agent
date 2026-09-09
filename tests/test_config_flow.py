@@ -429,3 +429,57 @@ async def test_an_undecidable_probe_leaves_images_off(
     advanced = result["data_schema"].schema[CONF_ADVANCED].schema.schema
     vision = next(key for key in advanced if str(key) == CONF_VISION)
     assert vision.default() is False
+
+
+async def test_a_task_model_is_not_asked_for_a_persona(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """A task worker generates data; it has no one to speak to."""
+    from custom_components.local_llm_conversation.const import SUBENTRY_TYPE_AI_TASK
+
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_TYPE_AI_TASK),
+        context={"source": config_entries.SOURCE_USER},
+    )
+    with probing(True):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {CONF_NAME: "Tasks", CONF_MODEL: "qwen3-32b"}
+        )
+
+    schema = result["data_schema"].schema
+    assert CONF_ASSISTANT_NAME not in schema
+    assert CONF_LLM_HASS_API not in schema
+    advanced = schema[CONF_ADVANCED].schema.schema
+    assert CONF_PROMPT not in advanced
+    assert CONF_SUPPORTS_TOOLS not in advanced
+    # The settings that do apply to a task worker are still there.
+    assert {str(key) for key in advanced} >= {CONF_VISION, "max_tokens", "temperature"}
+
+
+async def test_a_task_model_can_be_added_to_a_provider(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    from custom_components.local_llm_conversation.const import SUBENTRY_TYPE_AI_TASK
+
+    two_models(aioclient_mock)
+    entry = (await add_provider(hass))["result"]
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_TYPE_AI_TASK),
+        context={"source": config_entries.SOURCE_USER},
+    )
+    with probing(True):
+        result = await hass.config_entries.subentries.async_configure(
+            result["flow_id"], {CONF_NAME: "Tasks", CONF_MODEL: "qwen3-32b"}
+        )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {CONF_ADVANCED: {}}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    subentry = next(iter(entry.subentries.values()))
+    assert subentry.subentry_type == SUBENTRY_TYPE_AI_TASK
+    assert subentry.data[CONF_MODEL] == "qwen3-32b"

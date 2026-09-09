@@ -107,6 +107,58 @@
       "abort": {
         "entry_not_loaded": "Set up the provider before adding models to it."
       }
+    },
+    "ai_task_data": {
+      "title": "AI Task model",
+      "initiate_flow": {
+        "user": "Add an AI Task model",
+        "reconfigure": "Reconfigure AI Task model"
+      },
+      "entry_type": "AI Task",
+      "step": {
+        "user": {
+          "title": "Choose a model",
+          "description": "Pick a model to generate data with. It is then tested to see what it supports.",
+          "data": {
+            "name": "Name",
+            "model": "Model"
+          },
+          "data_description": {
+            "name": "Shown in Home Assistant, for example Voice or Study.",
+            "model": "Chosen from what the provider serves. Type a name if it is not listed."
+          }
+        },
+        "settings": {
+          "title": "Model settings",
+          "description": "{model}\n\nReads images: {vision}",
+          "data": {
+            "advanced": "Advanced"
+          },
+          "data_description": {},
+          "sections": {
+            "advanced": {
+              "name": "Advanced",
+              "data": {
+                "vision": "Send images to this model",
+                "thinking": "Let the model think first",
+                "max_tokens": "Maximum tokens to return",
+                "temperature": "Temperature",
+                "top_p": "Top P",
+                "timeout": "Response timeout (seconds)"
+              },
+              "data_description": {
+                "vision": "Set from testing the model. Servers accept images for text-only models and quietly ignore them, so this is measured by whether an image costs prompt tokens. Turn it off if you would rather not send camera snapshots.",
+                "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it.",
+                "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
+                "timeout": "How long to wait between streamed tokens before giving up."
+              }
+            }
+          }
+        }
+      },
+      "abort": {
+        "entry_not_loaded": "Set up the provider before adding models to it."
+      }
     }
   }
 }

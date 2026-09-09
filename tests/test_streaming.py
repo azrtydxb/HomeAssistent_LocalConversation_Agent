@@ -98,7 +98,13 @@ def accumulate(deltas: list[list[dict]]) -> list[tuple[str, str, str]]:
 def test_arguments_fragmented_across_deltas_are_rejoined() -> None:
     calls = accumulate(
         [
-            [{"index": 0, "id": "call_1", "function": {"name": "turn_on", "arguments": '{"ent'}}],
+            [
+                {
+                    "index": 0,
+                    "id": "call_1",
+                    "function": {"name": "turn_on", "arguments": '{"ent'},
+                }
+            ],
             [{"index": 0, "function": {"arguments": 'ity":"light.k'}}],
             [{"index": 0, "function": {"arguments": 'itchen"}'}}],
         ]
@@ -111,8 +117,16 @@ def test_parallel_tool_calls_do_not_bleed_into_each_other() -> None:
     calls = accumulate(
         [
             [
-                {"index": 0, "id": "a", "function": {"name": "turn_on", "arguments": '{"e":"1"'}},
-                {"index": 1, "id": "b", "function": {"name": "turn_off", "arguments": '{"e":"2"'}},
+                {
+                    "index": 0,
+                    "id": "a",
+                    "function": {"name": "turn_on", "arguments": '{"e":"1"'},
+                },
+                {
+                    "index": 1,
+                    "id": "b",
+                    "function": {"name": "turn_off", "arguments": '{"e":"2"'},
+                },
             ],
             [
                 {"index": 1, "function": {"arguments": "}"}},
@@ -128,9 +142,7 @@ def test_parallel_tool_calls_do_not_bleed_into_each_other() -> None:
 
 def test_missing_index_falls_back_to_arrival_order() -> None:
     """Some OpenAI-compatible servers omit index entirely."""
-    calls = accumulate(
-        [[{"id": "a", "function": {"name": "one", "arguments": "{}"}}]]
-    )
+    calls = accumulate([[{"id": "a", "function": {"name": "one", "arguments": "{}"}}]])
     assert calls == [("a", "one", "{}")]
 
 
@@ -138,7 +150,13 @@ def test_repeated_whole_name_is_not_duplicated() -> None:
     """Some servers resend the full function name on every delta."""
     calls = accumulate(
         [
-            [{"index": 0, "id": "a", "function": {"name": "get_state", "arguments": "{"}}],
+            [
+                {
+                    "index": 0,
+                    "id": "a",
+                    "function": {"name": "get_state", "arguments": "{"},
+                }
+            ],
             [{"index": 0, "function": {"name": "get_state", "arguments": "}"}}],
         ]
     )
