@@ -314,13 +314,19 @@ def _consumption_statistics(data: dict[str, Any]) -> set[str]:
     meters, and their readings are in litres and cubic metres - adding those into
     a kilowatt-hour total produces a confident, wrong number.
     """
-    return {
-        stat_id
-        for source in data.get("energy_sources", [])
-        if source.get("type") == "grid"
-        for flow in source.get("flow_from", [])
-        if (stat_id := flow.get("stat_energy_from"))
-    }
+    stat_ids: set[str] = set()
+    for source in data.get("energy_sources", []):
+        if source.get("type") != "grid":
+            continue
+        # A grid source carries its meters either as a flow_from list or as a
+        # single stat_energy_from. Both shapes occur on real dashboards, and
+        # reading only one silently finds no electricity at all.
+        for flow in source.get("flow_from", []):
+            if stat_id := flow.get("stat_energy_from"):
+                stat_ids.add(stat_id)
+        if stat_id := source.get("stat_energy_from"):
+            stat_ids.add(stat_id)
+    return stat_ids
 
 
 class HistoryAPI(llm.API):

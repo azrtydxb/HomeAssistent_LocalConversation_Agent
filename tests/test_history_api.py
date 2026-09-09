@@ -226,6 +226,25 @@ def test_only_grid_electricity_counts_towards_electricity() -> None:
     }
 
 
+def test_a_grid_source_is_found_in_either_shape() -> None:
+    """Real dashboards carry the meter both ways.
+
+    A grid source may list meters under flow_from or carry a single
+    stat_energy_from. Reading only flow_from finds no electricity at all on a
+    perfectly well configured house, and reports it as "no grid source".
+    """
+    flow_shape = {
+        "energy_sources": [
+            {"type": "grid", "flow_from": [{"stat_energy_from": "sensor.a"}]}
+        ]
+    }
+    direct_shape = {
+        "energy_sources": [{"type": "grid", "stat_energy_from": "sensor.b"}]
+    }
+    assert _consumption_statistics(flow_shape) == {"sensor.a"}
+    assert _consumption_statistics(direct_shape) == {"sensor.b"}
+
+
 def test_no_configured_sources_is_an_empty_set() -> None:
     assert _consumption_statistics({}) == set()
 
