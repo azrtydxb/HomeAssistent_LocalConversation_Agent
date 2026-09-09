@@ -78,6 +78,13 @@ list rather than before it, and omits it entirely when the selected API exposes 
 `GetDateTime` tool. This integration adds nothing volatile of its own, so the
 prefix stays stable across turns and prefill stays cheap.
 
+### Vision
+
+Image attachments are passed through to the model, so a camera snapshot can be
+part of the question — "who is at the front door?". The provider must be serving
+a vision-capable model. Non-image attachments are skipped, and a snapshot that has
+since been deleted is dropped rather than failing the turn.
+
 ## When things go wrong
 
 The provider is contacted once at startup. If it cannot be reached, Home

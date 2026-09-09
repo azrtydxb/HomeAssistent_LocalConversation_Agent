@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 from typing import Any, Literal
 
 from homeassistant.components import conversation
@@ -73,7 +75,9 @@ def _format_tool(
     return {"type": "function", "function": function}
 
 
-def _convert_content(content: conversation.Content) -> list[dict[str, Any]]:
+def _convert_content(
+    content: conversation.Content, images: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     """Render one chat log entry as OpenAI messages.
 
     Assistant turns that called tools become a single assistant message; the
@@ -83,6 +87,17 @@ def _convert_content(content: conversation.Content) -> list[dict[str, Any]]:
         return [{"role": "system", "content": content.content}]
 
     if content.role == "user":
+        if attached := _attached_images(content, images or {}):
+            # Multi-part form: text first, then each image the model can see.
+            return [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": content.content},
+                        *attached,
+                    ],
+                }
+            ]
         return [{"role": "user", "content": content.content}]
 
     if content.role == "tool_result":
@@ -110,6 +125,54 @@ def _convert_content(content: conversation.Content) -> list[dict[str, Any]]:
             for tool_call in content.tool_calls
         ]
     return [message]
+
+
+def _attached_images(
+    content: conversation.UserContent, images: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Return the user's attachments as OpenAI image parts."""
+    return [
+        {"type": "image_url", "image_url": {"url": url}}
+        for attachment in content.attachments or []
+        if (url := images.get(str(attachment.path)))
+    ]
+
+
+async def _async_load_images(
+    hass: HomeAssistant, chat_log: conversation.ChatLog
+) -> dict[str, str]:
+    """Read the conversation's image attachments into data URIs.
+
+    Reading happens in the executor: these are camera snapshots on disk, and the
+    event loop must not block on them. Anything that is not an image, or has
+    since been deleted, is skipped rather than failing the turn.
+    """
+    wanted: dict[str, str] = {}
+    for content in chat_log.content:
+        if content.role != "user" or not content.attachments:
+            continue
+        for attachment in content.attachments:
+            if not attachment.mime_type.startswith("image/"):
+                LOGGER.debug("Ignoring non-image attachment %s", attachment.mime_type)
+                continue
+            wanted[str(attachment.path)] = attachment.mime_type
+
+    if not wanted:
+        return {}
+
+    def read() -> dict[str, str]:
+        loaded: dict[str, str] = {}
+        for path, mime_type in wanted.items():
+            try:
+                raw = Path(path).read_bytes()
+            except OSError as err:
+                LOGGER.warning("Could not read attachment %s: %s", path, err)
+                continue
+            encoded = base64.b64encode(raw).decode("ascii")
+            loaded[path] = f"data:{mime_type};base64,{encoded}"
+        return loaded
+
+    return await hass.async_add_executor_job(read)
 
 
 async def _transform_stream(
@@ -269,6 +332,7 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
             return err.as_conversation_result()
 
         client: ChatCompletionsClient = self.entry.runtime_data
+        images = await _async_load_images(self.hass, chat_log)
         tools: list[dict[str, Any]] | None = None
         if chat_log.llm_api and options.get(CONF_SUPPORTS_TOOLS, True):
             tools = [
@@ -282,7 +346,7 @@ class LocalLLMConversationEntity(conversation.ConversationEntity):
                 "messages": [
                     message
                     for content in chat_log.content
-                    for message in _convert_content(content)
+                    for message in _convert_content(content, images)
                 ],
                 "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
                 "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
