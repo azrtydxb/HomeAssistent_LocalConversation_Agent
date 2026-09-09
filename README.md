@@ -131,6 +131,35 @@ describing a tool mid-sentence is answering, not calling.
 
 **None** lets the agent talk without acting.
 
+## Recorded data
+
+Home Assistant's Assist API answers about now. Selecting **Recorded data
+(history)** under Control Home Assistant as well adds three tools that answer
+about before:
+
+| Tool            | For                                                             |
+| --------------- | --------------------------------------------------------------- |
+| `GetHistory`    | What one entity was doing recently, and when it last changed.   |
+| `GetStatistics` | Long-run minimum, maximum, mean and total, by hour or day.      |
+| `GetEnergy`     | Electricity use per day, across the energy dashboard's sources. |
+
+Everything is bounded, and deliberately so. A local model has a fixed context
+window, so a query returning a month of readings is not an expensive answer — it
+is a failed turn. History is capped at 7 days, statistics at a year, energy at 92
+days, and every result is thinned to 50 rows.
+
+Results are **sampled evenly across the period, not truncated**. The last hour of
+a week is not an answer about the week, and a model handed the tail will describe
+it confidently as the whole. When a result has been thinned it says so, so the
+agent can tell you it is looking at a sample.
+
+Entities are subject to the same exposure rule as everything else: history cannot
+be used to read something you did not expose. Energy uses the sources configured
+in the energy dashboard.
+
+The recorder and energy integrations are optional. Without them the agent still
+works and the tools say plainly what is missing.
+
 ## AI Task
 
 A provider can also carry **AI Task** models, which generate data for automations

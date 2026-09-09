@@ -11,10 +11,17 @@ from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import CONF_API_KEY, CONF_LLM_HASS_API, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+    llm,
+)
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import CannotConnect, ChatCompletionsClient, InvalidAuth
+from .history_api import HistoryAPI
 from .const import (
     CONF_ADVANCED,
     CONF_BASE_URL,
@@ -28,6 +35,8 @@ from .const import (
 
 PLATFORMS = [Platform.AI_TASK, Platform.CONVERSATION]
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 type LocalLLMConfigEntry = ConfigEntry[ChatCompletionsClient]
 
 # Options that live inside the collapsed Advanced section of the model form.
@@ -39,6 +48,16 @@ ADVANCED_KEYS = (
     CONF_TIMEOUT,
     "supports_tools",
 )
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the tools this integration adds to Home Assistant.
+
+    Registered once for the whole integration rather than per provider: an API is
+    a set of tools, not a connection, and registering it twice fails.
+    """
+    llm.async_register_api(hass, HistoryAPI(hass))
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: LocalLLMConfigEntry) -> bool:
