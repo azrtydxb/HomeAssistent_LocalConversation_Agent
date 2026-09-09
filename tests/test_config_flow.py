@@ -16,7 +16,6 @@ from custom_components.local_llm_conversation.const import (
     CONF_BASE_URL,
     CONF_MODEL,
     CONF_PROMPT,
-    CONF_SUPPORTS_TOOLS,
     CONF_VISION,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_SOUL,
@@ -163,7 +162,7 @@ async def test_everyday_settings_are_visible_and_the_rest_folded_away(
     assert isinstance(advanced, section)
     assert advanced.options["collapsed"] is True
     assert CONF_PROMPT in advanced.schema.schema
-    assert CONF_SUPPORTS_TOOLS in advanced.schema.schema
+    assert "tool_mode" in advanced.schema.schema
 
 
 async def test_models_come_from_the_provider(
@@ -454,7 +453,7 @@ async def test_a_task_model_is_not_asked_for_a_persona(
     assert CONF_LLM_HASS_API not in schema
     advanced = schema[CONF_ADVANCED].schema.schema
     assert CONF_PROMPT not in advanced
-    assert CONF_SUPPORTS_TOOLS not in advanced
+    assert "tool_mode" not in advanced
     # The settings that do apply to a task worker are still there.
     assert {str(key) for key in advanced} >= {CONF_VISION, "max_tokens", "temperature"}
 

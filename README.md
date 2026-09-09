@@ -67,7 +67,7 @@ Switching it off sends `chat_template_kwargs: {"enable_thinking": false}`, which
 is how vLLM and SGLang disable it. Endpoints that ignore the hint simply keep
 reasoning, and the reasoning is still kept out of the spoken reply.
 | Response timeout | Time to wait between streamed tokens before giving up. |
-| Endpoint supports tool calling | Turn off only for models that cannot call tools. |
+| How the model calls tools | Native, prompted, or none. See below. |
 
 ## Notes on performance
 
@@ -97,6 +97,20 @@ model that may ignore them.
 
 Non-image attachments are skipped, and a snapshot deleted between turns is dropped
 rather than failing the conversation.
+
+### Tool calling
+
+**Native** is the default and right for vLLM, SGLang, LiteLLM and fastllm proxy:
+the tools go in the request and the endpoint handles them.
+
+**Prompted** is for small models whose serving stack offers no tool calling at
+all. The tools are described in the prompt and the reply is read for a JSON call.
+It is less reliable, and the reply cannot begin being spoken until it is complete,
+because whether it is an answer or a tool call is not known until then — so voice
+responses feel slower. Only a reply that is _nothing but_ a call counts; a model
+describing a tool mid-sentence is answering, not calling.
+
+**None** lets the agent talk without acting.
 
 ## AI Task
 

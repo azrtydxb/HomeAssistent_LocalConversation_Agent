@@ -6,6 +6,7 @@ without a running Home Assistant.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -125,3 +126,66 @@ class ToolCallAccumulator:
             for _, call in sorted(self._calls.items())
             if call.name
         ]
+
+
+# What a model without native tool calling is asked to emit. Kept minimal: small
+# models follow one short rule far better than a long specification.
+PROMPTED_TOOL_INSTRUCTIONS = """
+To use a tool, reply with nothing but a JSON object of this exact shape:
+
+{{"tool": "<tool name>", "arguments": {{<arguments>}}}}
+
+Do not wrap it in prose. If no tool is needed, answer normally and emit no JSON.
+
+Available tools:
+{tools}
+"""
+
+
+def prompted_tool_prompt(tools: list[dict[str, Any]]) -> str:
+    """Describe the tools in the prompt, for models that take none natively."""
+    described = "\n".join(
+        json.dumps(
+            {
+                "tool": tool["function"]["name"],
+                "description": tool["function"].get("description", ""),
+                "arguments": tool["function"].get("parameters", {}),
+            }
+        )
+        for tool in tools
+    )
+    return PROMPTED_TOOL_INSTRUCTIONS.format(tools=described)
+
+
+def parse_prompted_tool_call(text: str) -> tuple[str, str, dict[str, Any]] | None:
+    """Find a tool call in a model's plain text reply.
+
+    Returns ``(name, arguments_json, arguments)`` or None when the reply is an
+    ordinary answer. Only a reply that is *only* a tool call counts: a model
+    describing a tool mid-sentence is answering, not calling.
+    """
+    stripped = text.strip()
+    # Models fence JSON even when told not to.
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[-1] if "\n" in stripped else ""
+        stripped = stripped.rsplit("```", 1)[0].strip()
+    if not stripped.startswith("{") or not stripped.endswith("}"):
+        return None
+
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+
+    name = parsed.get("tool")
+    if not isinstance(name, str) or not name:
+        return None
+    arguments = parsed.get("arguments")
+    if arguments is None:
+        arguments = {}
+    if not isinstance(arguments, dict):
+        return None
+
+    return name, json.dumps(arguments), arguments

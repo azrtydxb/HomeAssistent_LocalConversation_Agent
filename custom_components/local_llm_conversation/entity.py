@@ -34,6 +34,7 @@ from .const import (
     CONF_MODEL,
     CONF_PROMPT,
     CONF_SUPPORTS_TOOLS,
+    CONF_TOOL_MODE,
     CONF_TEMPERATURE,
     CONF_THINKING,
     CONF_TIMEOUT,
@@ -47,10 +48,18 @@ from .const import (
     DEFAULT_TOP_P,
     DOMAIN,
     LOGGER,
+    DEFAULT_TOOL_MODE,
     MAX_TOOL_ITERATIONS,
     REASONING_KEYS,
+    TOOL_MODE_NONE,
+    TOOL_MODE_PROMPTED,
 )
-from .streaming import ThinkSplitter, ToolCallAccumulator
+from .streaming import (
+    ThinkSplitter,
+    ToolCallAccumulator,
+    parse_prompted_tool_call,
+    prompted_tool_prompt,
+)
 
 
 def _format_tool(
@@ -176,16 +185,20 @@ async def _async_load_images(
 
 async def _transform_stream(
     stream: AsyncGenerator[dict[str, Any]],
+    prompted: bool = False,
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
     """Translate endpoint SSE choices into chat log deltas.
 
     Tool calls are withheld until the stream ends because their arguments are
-    only valid JSON once every fragment has arrived.
+    only valid JSON once every fragment has arrived. In prompted mode the reply
+    text is withheld too: whether it is an answer or a tool call cannot be known
+    until it is complete, and half a tool call must never be spoken.
     """
     splitter = ThinkSplitter()
     tool_calls = ToolCallAccumulator()
     finish_reason: str | None = None
     produced_content = False
+    prompted_text = ""
 
     def spoken(text: str) -> str:
         """Drop the blank lines models leave between reasoning and the answer."""
@@ -211,6 +224,8 @@ async def _transform_stream(
             for kind, text in splitter.feed(content):
                 if kind == "thinking":
                     yield {"thinking_content": text}
+                elif prompted:
+                    prompted_text += text
                 elif spoken_text := spoken(text):
                     yield {"content": spoken_text}
 
@@ -220,10 +235,19 @@ async def _transform_stream(
     for kind, text in splitter.flush():
         if kind == "thinking":
             yield {"thinking_content": text}
+        elif prompted:
+            prompted_text += text
         elif spoken_text := spoken(text):
             yield {"content": spoken_text}
 
     completed = tool_calls.finish()
+
+    if prompted and prompted_text:
+        if call := parse_prompted_tool_call(prompted_text):
+            name, arguments, _ = call
+            completed = [*completed, ("", name, arguments)]
+        elif spoken_text := spoken(prompted_text):
+            yield {"content": spoken_text}
 
     # A reasoning model can spend its whole budget thinking and never answer,
     # which would otherwise surface as silence.
@@ -234,16 +258,19 @@ async def _transform_stream(
         )
 
     if completed:
-        yield {
-            "tool_calls": [
-                llm.ToolInput(
-                    id=call_id,
-                    tool_name=name,
-                    tool_args=_parse_arguments(name, arguments),
-                )
-                for call_id, name, arguments in completed
-            ]
-        }
+        yield {"tool_calls": [_tool_input(*call) for call in completed]}
+
+
+def _tool_input(call_id: str, name: str, arguments: str) -> llm.ToolInput:
+    """Build a tool call, letting Home Assistant supply a missing id.
+
+    A prompted call carries no id of its own, and an empty one would break the
+    tool result's reference back to it.
+    """
+    args = _parse_arguments(name, arguments)
+    if call_id:
+        return llm.ToolInput(id=call_id, tool_name=name, tool_args=args)
+    return llm.ToolInput(tool_name=name, tool_args=args)
 
 
 def _parse_arguments(name: str, arguments: str) -> dict[str, Any]:
@@ -315,12 +342,14 @@ class LocalLLMBaseEntity(Entity):
         options = self._settings
         client: ChatCompletionsClient = self.entry.runtime_data
 
+        mode = _tool_mode(options)
         tools: list[dict[str, Any]] | None = None
-        if chat_log.llm_api and options.get(CONF_SUPPORTS_TOOLS, True):
+        if chat_log.llm_api and mode != TOOL_MODE_NONE:
             tools = [
                 _format_tool(tool, chat_log.llm_api.custom_serializer)
                 for tool in chat_log.llm_api.tools
             ]
+        prompted = bool(tools) and mode == TOOL_MODE_PROMPTED
 
         # Whether this model reads images was settled by probing it when it was
         # chosen; the setting can then be turned off by hand.
@@ -342,8 +371,16 @@ class LocalLLMBaseEntity(Entity):
                 "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
                 "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
             }
-            if tools:
+            if tools and not prompted:
                 payload["tools"] = tools
+            elif prompted:
+                # The stack offers no tool calling, so the tools are described in
+                # the prompt and the reply is parsed for one instead.
+                payload["messages"][0] = {
+                    **payload["messages"][0],
+                    "content": payload["messages"][0]["content"]
+                    + prompted_tool_prompt(tools),
+                }
             if not options.get(CONF_THINKING, DEFAULT_THINKING):
                 # How vLLM and SGLang switch off a reasoning model's think block.
                 # Endpoints that ignore the hint simply keep reasoning, which the
@@ -354,7 +391,8 @@ class LocalLLMBaseEntity(Entity):
 
             try:
                 async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id, _transform_stream(client.async_stream_chat(payload))
+                    self.entity_id,
+                    _transform_stream(client.async_stream_chat(payload), prompted),
                 ):
                     pass
             except InvalidAuth:
@@ -387,3 +425,13 @@ def _response_format(structure: vol.Schema) -> dict[str, Any]:
             "strict": False,
         },
     }
+
+
+def _tool_mode(options: dict[str, Any]) -> str:
+    """Return how tools should be offered, honouring the old boolean setting."""
+    if (mode := options.get(CONF_TOOL_MODE)) is not None:
+        return mode
+    # Before this was a choice, off meant the agent could not act at all.
+    if options.get(CONF_SUPPORTS_TOOLS, True) is False:
+        return TOOL_MODE_NONE
+    return DEFAULT_TOOL_MODE

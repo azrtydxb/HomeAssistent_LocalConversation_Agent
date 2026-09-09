@@ -23,8 +23,16 @@ CONF_TEMPERATURE = "temperature"
 CONF_TOP_P = "top_p"
 CONF_TIMEOUT = "timeout"
 
-# Capability override. The target backends (vLLM, SGLang, LiteLLM, fastllm) all
-# support tool calling, so it defaults on and exists only as an escape hatch.
+# How the model is asked to call tools. The target backends all support the
+# native form, so that is the default; prompted exists for small local models
+# whose serving stack offers no tool calling at all.
+CONF_TOOL_MODE = "tool_mode"
+TOOL_MODE_NATIVE = "native"
+TOOL_MODE_PROMPTED = "prompted"
+TOOL_MODE_NONE = "none"
+DEFAULT_TOOL_MODE = TOOL_MODE_NATIVE
+
+# Superseded by CONF_TOOL_MODE; still read so existing setups keep working.
 CONF_SUPPORTS_TOOLS = "supports_tools"
 
 # Reasoning is off unless asked for: it costs seconds and a large slice of the

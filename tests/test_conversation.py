@@ -275,3 +275,83 @@ async def test_whitespace_only_response_still_reports_token_exhaustion() -> None
                 {"delta": {}, "finish_reason": "length"},
             ]
         )
+
+
+# --- prompted tool calling --------------------------------------------------
+
+
+async def collect_prompted(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from custom_components.local_llm_conversation.entity import _transform_stream
+
+    return [delta async for delta in _transform_stream(choices(items), True)]
+
+
+async def test_a_prompted_json_reply_becomes_a_tool_call() -> None:
+    """Models with no native tool calling emit the call as text."""
+    deltas = await collect_prompted(
+        [
+            {"delta": {"role": "assistant", "content": '{"tool": "HassTurnOn",'}},
+            {"delta": {"content": ' "arguments": {"name": "lamp"}}'}},
+            {"delta": {}, "finish_reason": "stop"},
+        ]
+    )
+
+    (tool_delta,) = [d for d in deltas if "tool_calls" in d]
+    (call,) = tool_delta["tool_calls"]
+    assert call.tool_name == "HassTurnOn"
+    assert call.tool_args == {"name": "lamp"}
+    # An id must exist for the tool result to refer back to.
+    assert call.id
+    # Half a tool call must never be spoken while it streams.
+    assert text_of(deltas, "content") == ""
+
+
+async def test_a_prompted_ordinary_answer_is_still_spoken() -> None:
+    deltas = await collect_prompted(
+        [
+            {"delta": {"role": "assistant", "content": "The kitchen "}},
+            {"delta": {"content": "light is on."}},
+            {"delta": {}, "finish_reason": "stop"},
+        ]
+    )
+    assert text_of(deltas, "content") == "The kitchen light is on."
+    assert not [d for d in deltas if "tool_calls" in d]
+
+
+async def test_native_mode_still_streams_text_as_it_arrives() -> None:
+    """Withholding text is the price of prompted mode, not a general change."""
+    deltas = await collect(
+        [
+            {"delta": {"content": "The light "}},
+            {"delta": {"content": "is on."}},
+        ]
+    )
+    assert [d for d in deltas if "content" in d] == [
+        {"content": "The light "},
+        {"content": "is on."},
+    ]
+
+
+def test_the_old_tools_switch_still_decides_for_existing_setups() -> None:
+    """Before this was a choice, off meant the agent could not act at all.
+
+    Losing this would silently hand tools back to someone who deliberately took
+    them away.
+    """
+    from custom_components.local_llm_conversation.const import (
+        CONF_SUPPORTS_TOOLS,
+        CONF_TOOL_MODE,
+        TOOL_MODE_NATIVE,
+        TOOL_MODE_NONE,
+        TOOL_MODE_PROMPTED,
+    )
+    from custom_components.local_llm_conversation.entity import _tool_mode
+
+    assert _tool_mode({CONF_SUPPORTS_TOOLS: False}) == TOOL_MODE_NONE
+    assert _tool_mode({CONF_SUPPORTS_TOOLS: True}) == TOOL_MODE_NATIVE
+    assert _tool_mode({}) == TOOL_MODE_NATIVE
+    # An explicit choice always wins over the setting it replaced.
+    assert (
+        _tool_mode({CONF_TOOL_MODE: TOOL_MODE_PROMPTED, CONF_SUPPORTS_TOOLS: False})
+        == TOOL_MODE_PROMPTED
+    )

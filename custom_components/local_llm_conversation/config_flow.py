@@ -45,7 +45,7 @@ from .const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
-    CONF_SUPPORTS_TOOLS,
+    CONF_TOOL_MODE,
     CONF_TEMPERATURE,
     CONF_THINKING,
     CONF_TIMEOUT,
@@ -58,10 +58,14 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_THINKING,
     DEFAULT_TIMEOUT,
+    DEFAULT_TOOL_MODE,
     DEFAULT_TOP_P,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK,
     SUBENTRY_TYPE_CONVERSATION,
+    TOOL_MODE_NATIVE,
+    TOOL_MODE_NONE,
+    TOOL_MODE_PROMPTED,
 )
 
 STEP_USER_SCHEMA = vol.Schema(
@@ -385,13 +389,19 @@ class ModelSubentryFlow(ConfigSubentryFlow):
             }
         )
         if self._is_conversation:
-            # A task worker is given no tool API, so the switch would do nothing.
+            # A task worker is given no tool API, so the choice would do nothing.
             inner[
                 vol.Optional(
-                    CONF_SUPPORTS_TOOLS,
-                    default=advanced.get(CONF_SUPPORTS_TOOLS, True),
+                    CONF_TOOL_MODE,
+                    default=advanced.get(CONF_TOOL_MODE, DEFAULT_TOOL_MODE),
                 )
-            ] = bool
+            ] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[TOOL_MODE_NATIVE, TOOL_MODE_PROMPTED, TOOL_MODE_NONE],
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key=CONF_TOOL_MODE,
+                )
+            )
         schema[vol.Required(CONF_ADVANCED)] = section(
             vol.Schema(inner), {"collapsed": True}
         )

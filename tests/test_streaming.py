@@ -181,3 +181,100 @@ def test_empty_arguments_become_an_empty_object() -> None:
 
 def test_no_tool_calls_yields_nothing() -> None:
     assert accumulate([]) == []
+
+
+# --- prompted tool calling, for models with no native support ---------------
+
+
+def test_a_bare_json_object_is_read_as_a_tool_call() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    call = parse_prompted_tool_call(
+        '{"tool": "HassTurnOn", "arguments": {"name": "lamp"}}'
+    )
+    assert call == ("HassTurnOn", '{"name": "lamp"}', {"name": "lamp"})
+
+
+def test_a_fenced_block_is_read_too() -> None:
+    """Small models fence JSON even when told not to."""
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    text = '```json\n{"tool": "HassTurnOff", "arguments": {"name": "lamp"}}\n```'
+    name, _, args = parse_prompted_tool_call(text)
+    assert (name, args) == ("HassTurnOff", {"name": "lamp"})
+
+
+def test_a_tool_with_no_arguments_is_allowed() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    assert parse_prompted_tool_call('{"tool": "GetLiveContext"}') == (
+        "GetLiveContext",
+        "{}",
+        {},
+    )
+
+
+def test_an_ordinary_answer_is_not_mistaken_for_a_call() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    assert parse_prompted_tool_call("The kitchen light is on.") is None
+
+
+def test_a_reply_merely_mentioning_a_tool_is_not_a_call() -> None:
+    """A model explaining itself must not be executed."""
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    text = 'I could call {"tool": "HassTurnOn"} but I will not.'
+    assert parse_prompted_tool_call(text) is None
+
+
+def test_malformed_json_is_not_a_call() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    assert parse_prompted_tool_call('{"tool": "HassTurnOn", "arguments":') is None
+
+
+def test_a_nameless_or_odd_shape_is_rejected() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        parse_prompted_tool_call,
+    )
+
+    assert parse_prompted_tool_call('{"arguments": {"name": "lamp"}}') is None
+    assert parse_prompted_tool_call('{"tool": ""}') is None
+    assert parse_prompted_tool_call('{"tool": "X", "arguments": "lamp"}') is None
+    assert parse_prompted_tool_call("[1, 2, 3]") is None
+
+
+def test_the_tool_list_reaches_the_prompt() -> None:
+    from custom_components.local_llm_conversation.streaming import (
+        prompted_tool_prompt,
+    )
+
+    prompt = prompted_tool_prompt(
+        [
+            {
+                "type": "function",
+                "function": {
+                    "name": "HassTurnOn",
+                    "description": "Turns on a device",
+                    "parameters": {"type": "object"},
+                },
+            }
+        ]
+    )
+    assert "HassTurnOn" in prompt
+    assert "Turns on a device" in prompt
+    # The braces in the instructions must survive formatting.
+    assert '{"tool": "<tool name>"' in prompt

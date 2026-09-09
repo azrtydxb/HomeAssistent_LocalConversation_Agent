@@ -90,7 +90,7 @@
                 "temperature": "Temperature",
                 "top_p": "Top P",
                 "timeout": "Response timeout (seconds)",
-                "supports_tools": "Endpoint supports tool calling"
+                "tool_mode": "How the model calls tools"
               },
               "data_description": {
                 "prompt": "The agent's persona. {name} is replaced with the assistant name above.",
@@ -98,7 +98,7 @@
                 "thinking": "Reasoning models answer better but take seconds longer and spend much of the token budget before replying. Off unless you need it.",
                 "max_tokens": "How long a reply may be. Reasoning models spend much of this before answering, so do not set it low.",
                 "timeout": "How long to wait between streamed tokens before giving up.",
-                "supports_tools": "Turn off only for models that cannot call tools; the agent then answers without controlling anything."
+                "tool_mode": "Native uses the endpoint's tool calling and is right for vLLM, SGLang and LiteLLM. Prompted describes the tools in the prompt and reads the reply for a call, for small models whose stack offers none - it is less reliable and the reply cannot start being spoken until it is complete. None lets the agent talk without acting."
               }
             }
           }
@@ -158,6 +158,15 @@
       },
       "abort": {
         "entry_not_loaded": "Set up the provider before adding models to it."
+      }
+    }
+  },
+  "selector": {
+    "tool_mode": {
+      "options": {
+        "native": "Native tool calling",
+        "prompted": "Described in the prompt",
+        "none": "No tools"
       }
     }
   }

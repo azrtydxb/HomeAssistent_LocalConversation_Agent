@@ -250,3 +250,67 @@ async def test_a_snapshot_is_withheld_from_a_model_that_ignores_images(
 ) -> None:
     """Sending it would cost prompt tokens for something never looked at."""
     assert not carries_an_image(await ask_with_image(hass, tmp_path, vision=False))
+
+
+async def payload_for_tool_mode(hass: HomeAssistant, mode: str) -> dict[str, Any]:
+    """Run one turn with the given tool mode and return what was sent."""
+    from custom_components.local_llm_conversation.const import CONF_TOOL_MODE
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={CONF_BASE_URL: "http://localhost:8000"},
+        subentries_data=[
+            {
+                "subentry_type": SUBENTRY_TYPE_CONVERSATION,
+                "title": f"Voice {mode}",
+                "unique_id": None,
+                "data": {
+                    CONF_MODEL: "qwen3",
+                    "llm_hass_api": ["assist"],
+                    CONF_ADVANCED: {CONF_TOOL_MODE: mode},
+                },
+            }
+        ],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    sent: list[dict[str, Any]] = []
+
+    def capture(payload: dict[str, Any]):
+        sent.append(payload)
+        return reply(payload)
+
+    with patch.object(entry.runtime_data, "async_stream_chat", side_effect=capture):
+        await conversation.async_converse(
+            hass, "Hello", None, Context(), agent_id=f"conversation.voice_{mode}"
+        )
+    return sent[0]
+
+
+async def test_native_mode_sends_tools_in_the_request(hass: HomeAssistant) -> None:
+    payload = await payload_for_tool_mode(hass, "native")
+    assert payload["tools"]
+    assert (
+        "tool"
+        not in payload["messages"][0]["content"].lower().split("available")[0][-40:]
+    )
+
+
+async def test_prompted_mode_describes_tools_in_the_prompt_instead(
+    hass: HomeAssistant,
+) -> None:
+    """For stacks with no tool calling, the request must carry no tools field."""
+    payload = await payload_for_tool_mode(hass, "prompted")
+    assert "tools" not in payload
+    system = payload["messages"][0]["content"]
+    assert "Available tools:" in system
+    assert "HassTurnOn" in system
+
+
+async def test_no_tools_mode_offers_none_at_all(hass: HomeAssistant) -> None:
+    payload = await payload_for_tool_mode(hass, "none")
+    assert "tools" not in payload
+    assert "Available tools:" not in payload["messages"][0]["content"]
