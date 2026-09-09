@@ -386,3 +386,15 @@ async def test_a_chosen_language_is_pinned_in_the_prompt(hass: HomeAssistant) ->
     system = payload["messages"][0]["content"]
     assert "language tag 'nl'" in system
     assert "whatever language you are addressed in" in system
+
+
+async def test_whole_numbers_are_sent_as_integers(hass: HomeAssistant) -> None:
+    """Home Assistant's number selector stores 4096 as 4096.0.
+
+    Endpoints that expect an integer reject the float outright, so every turn
+    fails as soon as anyone opens the settings form and saves it — which is
+    everyone.
+    """
+    payload = await payload_with_advanced(hass, {"max_tokens": 4096.0}, "Floats")
+    assert payload["max_tokens"] == 4096
+    assert isinstance(payload["max_tokens"], int)

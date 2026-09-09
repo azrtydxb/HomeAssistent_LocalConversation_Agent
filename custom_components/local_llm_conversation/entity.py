@@ -378,7 +378,10 @@ class LocalLLMBaseEntity(Entity):
                     for content in chat_log.content
                     for message in _convert_content(content, images)
                 ],
-                "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                # Home Assistant's number selector stores whole numbers as
+                # floats, and an endpoint expecting an integer rejects 4096.0
+                # outright, so every turn fails once the form has been saved.
+                "max_tokens": int(options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)),
                 **_sampling(options),
             }
             if tools and not prompted:
