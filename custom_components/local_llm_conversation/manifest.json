@@ -5,10 +5,10 @@
   "codeowners": ["@piwi3910"],
   "config_flow": true,
   "dependencies": ["ai_task", "conversation"],
-  "documentation": "https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent",
+  "documentation": "https://azrtydxb.github.io/ha-local-llm-conversation",
   "integration_type": "service",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/azrtydxb/HomeAssistent_LocalConversation_Agent/issues",
+  "issue_tracker": "https://github.com/azrtydxb/ha-local-llm-conversation/issues",
   "requirements": [],
-  "version": "0.15.1"
+  "version": "0.16.0"
 }

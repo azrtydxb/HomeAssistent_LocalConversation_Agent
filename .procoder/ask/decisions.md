@@ -83,7 +83,7 @@ gh account is `piwi3910`. The chosen URL must also be written into
 ## BLOCKED: azrtydxb org is disabled
 
 The repo was made public successfully, but `git push` is refused with
-"Repository 'azrtydxb/HomeAssistent_LocalConversation_Agent' is disabled.
+"Repository 'azrtydxb/ha-local-llm-conversation' is disabled.
 Please ask the owner to check their account." (HTTP 403). This is an
 account-level problem on the org, not a permissions or protocol issue.
 
@@ -225,3 +225,21 @@ plus a dropdown puts both on screen with the dropdown inert while unchecked.
 
 Recommend deferring: the soul covers the persona half, and every enabled skill is
 paid on every utterance in prompt size.
+
+## Publishing to the default HACS registry
+
+Every inclusion requirement is met: public, described, issues enabled, five
+topics, not archived, 25 releases, a brand icon, `hacs.json` with a name, the HACS
+and hassfest actions both green with no `ignore` key, and the submitter credited
+with every commit and an org member.
+
+Submission is a pull request to `hacs/default` adding one line to `integration`,
+which sorts between `azogue/eventsensor` and `azsaurr/ha_usms`.
+
+Open first: the repository is named `ha-local-llm-conversation`, with
+"Assistent" misspelled. HACS lists by full repository name, so that spelling
+becomes the public listing and the entry in `hacs/default`. Renaming afterwards
+means a second pull request there, and changes the documentation site URL, which
+is also the link behind the ? in Home Assistant.
+- Rename the repository first, then submit.
+- Submit as it is; the name is not worth the churn.

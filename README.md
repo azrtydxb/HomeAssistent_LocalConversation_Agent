@@ -8,7 +8,7 @@ house. Ask it to turn the lights off, what the freezer did overnight, or who is 
 the door. It runs on your own hardware and answers like a household butler rather
 than a chatbot.
 
-📖 **[Full documentation](https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent)**
+📖 **[Full documentation](https://azrtydxb.github.io/ha-local-llm-conversation)**
 
 ## What you get
 
@@ -36,10 +36,10 @@ Devices & services_.
 You add a **provider** (your endpoint), then one or more **models** on it. Each
 model becomes its own conversation agent.
 
-→ [Installation and setup](https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent/install.html) ·
-[Configuration](https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent/configuration.html) ·
-[What the agent can do](https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent/capabilities.html) ·
-[Troubleshooting](https://azrtydxb.github.io/HomeAssistent_LocalConversation_Agent/troubleshooting.html)
+→ [Installation and setup](https://azrtydxb.github.io/ha-local-llm-conversation/install.html) ·
+[Configuration](https://azrtydxb.github.io/ha-local-llm-conversation/configuration.html) ·
+[What the agent can do](https://azrtydxb.github.io/ha-local-llm-conversation/capabilities.html) ·
+[Troubleshooting](https://azrtydxb.github.io/ha-local-llm-conversation/troubleshooting.html)
 
 ## Development
 
